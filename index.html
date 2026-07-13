@@ -1,0 +1,3374 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>Laperle — Mini App</title>
+<style>
+:root{
+  --accent:#39FF14;
+  --accent-dim:#2ecc0f;
+  --bg:#0a0a0a;
+  --bg-card:#111a11;
+  --bg-elevated:#131313;
+  --border:#1c2a1c;
+  --border-soft:#1a1a1a;
+  --text:#f2f2f2;
+  --text-dim:#8a938a;
+  --text-faint:#5c655c;
+  --danger:#ff4d4d;
+  --radius:16px;
+  --radius-sm:10px;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; touch-action:manipulation;}
+html,body{height:100%; overscroll-behavior:none; overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Inter',sans-serif;
+  display:flex;
+  justify-content:center;
+  min-height:100vh;
+  min-height:100dvh;
+  -webkit-font-smoothing:antialiased;
+}
+button, input, textarea, select{font-family:inherit; -webkit-appearance:none; appearance:none;}
+input, textarea, select{font-size:16px;} /* iOS Safari zooms the page on focus if a field is under 16px — keep every field at/above this */
+button{cursor:pointer;}
+button:active{opacity:0.72;}
+a{color:inherit; text-decoration:none;}
+/* prevent iOS auto-zoom on focus: inputs must be >=16px, already enforced per-field below */
+
+#app{
+  width:100%;
+  max-width:520px;
+  height:100vh;
+  height:calc(var(--vh, 1vh) * 100);
+  height:100dvh;
+  height:var(--tg-viewport-stable-height, var(--vh-fallback, 100dvh)); /* Telegram WebView: real usable height */
+  background:var(--bg);
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+@media (min-width:521px){
+  #app{
+    max-width:430px;
+    height:100vh;
+    height:100dvh;
+    max-height:932px;
+    margin:12px 0;
+    border-radius:36px;
+    box-shadow:0 0 0 1px #222, 0 30px 80px rgba(0,0,0,0.6);
+  }
+}
+
+/* device safe-area spacer (replaces fake iOS status bar; real device chrome shows above this automatically) */
+.safe-top{flex-shrink:0; height:env(safe-area-inset-top,0px);}
+
+/* #views must grow to fill remaining space AND allow its child to shrink below content size —
+   without min-height:0 here, flexbox lets .view's content push #app taller than the screen,
+   which kills the inner scroll and makes the whole thing feel broken/backwards on touch. */
+#views{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* ---------- top bar ---------- */
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px 10px;
+  flex-shrink:0;
+}
+.topbar .btn-pill{
+  display:flex; align-items:center; gap:6px;
+  background:rgba(255,255,255,0.08);
+  border:none; color:#fff; font-size:14px; font-weight:600;
+  padding:10px 16px; border-radius:20px;
+  min-height:40px;
+}
+.topbar .right-icons{display:flex; gap:8px;}
+.topbar .icon-btn{
+  width:38px; height:38px; border-radius:50%;
+  background:rgba(255,255,255,0.08);
+  display:flex; align-items:center; justify-content:center;
+  color:#fff;
+}
+.topbar.with-title{padding-top:2px;}
+.topbar .title-block{display:flex; align-items:center; gap:10px;}
+.topbar .title-block .logo-badge{
+  width:34px;height:34px;border-radius:10px;
+  background:linear-gradient(145deg,var(--accent),#0d5c05);
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;
+}
+.topbar .title-block h1{font-size:17px; font-weight:700;}
+.topbar .title-block .sub{font-size:11px; color:var(--text-dim); font-weight:500;}
+.back-btn{display:flex; align-items:center; gap:4px; background:none; border:none; color:#fff; font-size:15px; font-weight:500; min-height:40px; padding:4px 6px 4px 0;}
+
+/* ---------- views ---------- */
+.view{
+  flex:1 1 auto; min-height:0;
+  overflow-y:auto; overflow-x:hidden;
+  padding-bottom:20px;
+  display:none;
+  -ms-overflow-style:none; scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+}
+.view::-webkit-scrollbar{display:none;}
+.view.active{display:block;}
+
+/* ---------- bottom nav ----------
+   Deliberately NOT position:fixed/absolute. Telegram's in-app browser has known bugs
+   computing "the real bottom of the screen" for fixed-positioned elements, which is
+   exactly why the bar was invisible/cut off on real phones. Instead the nav is just a
+   normal flex child that sits right after the scrollable content — it can never end up
+   anywhere but visible, because it isn't positioned relative to the viewport at all. */
+.bottomnav{
+  flex-shrink:0;
+  width:100%;
+  background:var(--navbar-bg, rgba(8,10,8,0.98));
+  border-top:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:space-around;
+  padding:8px 2px calc(10px + env(safe-area-inset-bottom,0px));
+}
+.navitem{
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  background:none; border:none; color:var(--text-faint);
+  font-size:9px; font-weight:600; letter-spacing:0.2px;
+  position:relative; flex:1; min-width:0;
+  min-height:44px; justify-content:center;
+  padding:4px 0;
+}
+.navitem svg{width:21px; height:21px; flex-shrink:0;}
+.navitem span{max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.navitem.active{color:var(--navbar-accent, var(--accent));}
+.navitem.pill{color:#000;}
+.navitem.pill .icon-wrap{
+  width:27px;height:27px;border-radius:50%;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  color:#000;
+}
+.navitem.pill .icon-wrap svg{width:15px;height:15px;}
+.navitem.pill.admin .icon-wrap{background:var(--accent);}
+.navitem .badge{
+  position:absolute; top:0px; right:14%;
+  background:#ff9500; color:#000; font-size:8px; font-weight:800;
+  width:14px;height:14px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+}
+.navitem .badge svg{width:8px;height:8px;}
+
+/* ---------- shared components ---------- */
+.section-label{
+  font-size:11px; font-weight:700; letter-spacing:1.5px; color:var(--text-faint);
+  text-transform:uppercase; padding:18px 18px 8px;
+}
+.empty-state{
+  margin:14px 18px; padding:40px 20px;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+  text-align:center;
+}
+.empty-state .icon-circle{
+  width:52px;height:52px;border-radius:50%;
+  background:var(--bg-card); border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--accent);
+}
+.empty-state p{font-size:13.5px; color:var(--text-dim); max-width:240px; line-height:1.5;}
+.empty-state .title{font-size:14px; font-weight:600; color:#fff;}
+
+.btn-primary{
+  width:100%; background:linear-gradient(180deg,#4dff20,var(--accent-dim));
+  color:#04240a; border:none; font-weight:800; font-size:14.5px;
+  padding:15px; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:8px;
+  letter-spacing:0.3px;
+}
+.btn-outline{
+  width:100%; background:transparent; border:1px solid var(--border);
+  color:#fff; font-weight:600; font-size:14px; padding:14px; border-radius:14px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.pill-tag{
+  font-size:11px; font-weight:700; color:var(--accent); background:rgba(57,255,20,0.1);
+  border:1px solid rgba(57,255,20,0.35); padding:3px 10px; border-radius:20px;
+}
+
+/* ---------- HOME / HERO ---------- */
+.hero{
+  margin:6px 14px 0; padding:34px 18px 26px;
+  border-radius:20px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(57,255,20,0.16), transparent 60%),
+    #070907;
+  border:1px solid var(--border);
+  position:relative; text-align:center; overflow:hidden;
+}
+.hero .corner{position:absolute; width:22px; height:22px; border-color:var(--accent); opacity:0.8;}
+.hero .corner.tl{top:12px; left:12px; border-top:2px solid; border-left:2px solid; border-radius:4px 0 0 0;}
+.hero .corner.tr{top:12px; right:12px; border-top:2px solid; border-right:2px solid; border-radius:0 4px 0 0;}
+.hero .corner.bl{bottom:60px; left:12px; border-bottom:2px solid; border-left:2px solid; border-radius:0 0 0 4px;}
+.hero .corner.br{bottom:60px; right:12px; border-bottom:2px solid; border-right:2px solid; border-radius:0 0 4px 0;}
+.hero .live-row{display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700; letter-spacing:1px; color:var(--text-dim); margin-bottom:26px;}
+.hero .live-row .dot{color:var(--accent); display:flex; align-items:center; gap:6px;}
+.hero .live-row .dot::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); display:inline-block;}
+.hero .eyebrow{font-size:11px; font-weight:700; letter-spacing:3px; color:var(--accent); margin-bottom:10px;}
+.hero .eyebrow::before, .hero .eyebrow::after{content:'—'; margin:0 8px; opacity:0.6;}
+.hero h1{
+  font-family:'Arial Black',Impact,sans-serif; font-size:40px; font-weight:900;
+  letter-spacing:1px; color:#eef1ee; line-height:1;
+  text-shadow:0 0 22px rgba(57,255,20,0.35);
+  margin-bottom:12px;
+}
+.hero .sub{font-size:12px; letter-spacing:3px; color:var(--text-dim); font-weight:600; margin-bottom:20px;}
+.hero .explore-btn{
+  display:inline-flex; align-items:center; gap:12px;
+  background:var(--accent); color:#04240a; font-weight:800; font-size:14px; letter-spacing:1px;
+  padding:13px 8px 13px 22px; border-radius:30px; border:none;
+}
+.hero .explore-btn .arrowcircle{
+  width:26px;height:26px;border-radius:50%; background:rgba(0,0,0,0.18);
+  display:flex;align-items:center;justify-content:center;
+}
+.hero .scroll-cue{margin-top:22px; font-size:9px; letter-spacing:2px; color:var(--text-faint); font-weight:700; display:flex; flex-direction:column; align-items:center; gap:3px;}
+
+.shop-banner{
+  margin:16px 14px 0; padding:16px 4px 14px;
+  border-bottom:1px solid var(--border-soft);
+}
+.shop-banner .row{display:flex; align-items:center; gap:12px;}
+.shop-banner .avatar{
+  width:42px;height:42px;border-radius:50%; border:2px solid var(--accent);
+  display:flex;align-items:center;justify-content:center; font-weight:800; color:var(--accent); font-size:16px;
+  box-shadow:0 0 14px rgba(57,255,20,0.35);
+}
+.shop-banner .meta{flex:1;}
+.shop-banner .status{font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--accent); display:flex; align-items:center; gap:5px; margin-bottom:2px;}
+.shop-banner .status::before{content:''; width:5px;height:5px;border-radius:50%;background:var(--accent);}
+.shop-banner h2{font-size:22px; font-weight:800;}
+.shop-banner .count{
+  display:inline-block; margin-top:10px; font-size:12px; font-weight:700; color:var(--accent);
+  border:1px solid rgba(57,255,20,0.4); background:rgba(57,255,20,0.07); padding:4px 14px; border-radius:20px;
+}
+
+.filter-row{display:flex; gap:10px; margin:14px 14px 0;}
+.filter-pill{
+  flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+  border:1px solid var(--border); border-radius:12px; padding:12px; font-size:13.5px; font-weight:600; color:#dfe4df;
+  background:rgba(255,255,255,0.02);
+}
+.filter-pill.active{border-color:var(--accent); color:var(--accent); background:rgba(57,255,20,0.07);}
+.rot180{transform:rotate(180deg);}
+
+/* ---------- filter sheet (catégories / farms) ---------- */
+.filter-sheet-overlay{
+  position:absolute; inset:0; z-index:50;
+  background:rgba(0,0,0,0.6);
+  display:flex; align-items:flex-end;
+}
+.filter-sheet{
+  width:100%; max-height:70%; overflow-y:auto;
+  background:var(--bg-elevated); border:1px solid var(--border-soft);
+  border-radius:20px 20px 0 0; padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));
+}
+.filter-sheet-handle{width:36px; height:4px; border-radius:2px; background:var(--border); margin:0 auto 14px;}
+.filter-sheet-title{font-size:15px; font-weight:700; color:#fff; margin-bottom:12px;}
+.filter-sheet-item{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:13px 4px; font-size:14px; font-weight:600; color:#dfe4df;
+  border-bottom:1px solid var(--border-soft);
+}
+.filter-sheet-item:last-child{border-bottom:none;}
+.filter-sheet-item.selected{color:var(--accent);}
+.filter-sheet-empty{padding:24px 4px; text-align:center; color:var(--text-dim); font-size:13.5px;}
+
+/* ---------- INFOS ---------- */
+.info-card{
+  background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px;
+  padding:14px; margin-bottom:12px;
+}
+.info-row{display:flex; align-items:center; justify-content:space-between;}
+.info-left{display:flex; align-items:center; gap:10px; font-size:14px; font-weight:600; color:#eee;}
+.info-left svg{width:18px;height:18px; color:var(--accent);}
+.meetup-item{display:flex; align-items:center; justify-content:space-between; padding:8px 0; font-size:13.5px;}
+.meetup-item svg{width:16px;height:16px;color:var(--text-dim);}
+
+/* ---------- CARTE ---------- */
+.carrier-row::-webkit-scrollbar{display:none;}
+.carrier-chip{
+  flex-shrink:0; font-size:12px; font-weight:700; border:1px solid; padding:7px 14px; border-radius:20px; background:rgba(255,255,255,0.02);
+  white-space:nowrap;
+}
+.map-wrap{position:relative; margin:0 0 0; height:58vh; min-height:380px;}
+.map-fake{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.03), transparent 40%),
+    #0d0f0d;
+  border-top:1px solid var(--border-soft);
+  overflow:hidden;
+}
+.map-fake::before{
+  content:''; position:absolute; inset:0; opacity:0.35;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size:32px 32px;
+}
+.map-pin{
+  position:absolute; transform:translate(-50%,-50%);
+  width:34px;height:34px;border-radius:50%; border:2px solid;
+  display:flex;align-items:center;justify-content:center; font-size:12px; font-weight:800;
+}
+.map-pin.drop{background:none;border:none; color:#ff4d4d; width:26px;height:26px;}
+.map-pin.drop svg{width:26px;height:26px; fill:#ff4d4d; color:#ff4d4d;}
+.map-controls{position:absolute; right:14px; bottom:20px; display:flex; flex-direction:column; gap:8px;}
+.map-ctrl-btn{
+  width:36px;height:36px;border-radius:10px; background:rgba(20,22,20,0.9); border:1px solid var(--border-soft);
+  display:flex;align-items:center;justify-content:center; color:#fff;
+}
+.map-ctrl-btn svg{width:17px;height:17px;}
+
+/* ---------- AVIS ---------- */
+.rating-card{
+  margin:6px 16px 0; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:16px;
+  padding:18px; display:flex; gap:20px; align-items:center;
+}
+.rating-big{text-align:center; min-width:80px;}
+.rating-big .score{font-size:38px; font-weight:800;}
+.rating-big .stars{display:flex; gap:2px; color:var(--text-faint); justify-content:center; margin:2px 0;}
+.rating-big .stars svg{width:14px;height:14px;}
+.rating-bars{flex:1; display:flex; flex-direction:column; gap:6px;}
+.rbar-row{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-dim);}
+.rbar-row svg{width:10px;height:10px; color:var(--text-faint);}
+.rbar-row span:first-child{width:34px; display:flex; align-items:center; gap:3px;}
+.rbar{flex:1; height:5px; background:var(--border-soft); border-radius:4px; overflow:hidden;}
+.rbar-fill{height:100%; background:var(--accent);}
+.rbar-n{width:14px; text-align:right;}
+
+/* ---------- CHAT ---------- */
+.chat-input-bar{
+  position:absolute; bottom:88px; left:0; right:0; padding:0 16px;
+  display:flex; gap:10px; align-items:center;
+}
+.chat-input-bar input{
+  flex:1; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:24px;
+  padding:14px 18px; color:#fff; font-size:16px;
+}
+.chat-input-bar input::placeholder{color:var(--text-faint);}
+.send-btn{
+  width:44px;height:44px;border-radius:50%; background:var(--accent); border:none;
+  display:flex;align-items:center;justify-content:center; color:#04240a; flex-shrink:0;
+}
+.send-btn svg{width:18px;height:18px;}
+
+/* ---------- PROFIL ---------- */
+.profile-avatar{
+  width:76px;height:76px;border-radius:50%; border:2.5px solid var(--accent);
+  display:flex;align-items:center;justify-content:center; font-size:28px; font-weight:800; color:var(--accent);
+  box-shadow:0 0 26px rgba(57,255,20,0.4);
+}
+.stat-box{
+  flex:1; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px;
+  padding:14px; text-align:center;
+}
+.stat-box .v{font-size:18px; font-weight:800;}
+.stat-box .l{font-size:10.5px; color:var(--text-dim); margin-top:2px;}
+.lang-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding:4px 16px 6px;}
+.lang-pill{
+  border:1px solid var(--border); background:var(--bg-card); color:#ddd; font-size:12px; font-weight:600;
+  padding:10px 4px; border-radius:10px; display:flex; align-items:center; justify-content:center; gap:5px;
+}
+.lang-pill.on{border-color:var(--accent); background:rgba(57,255,20,0.08); color:var(--accent);}
+
+/* ---------- ADMIN ---------- */
+.admin-head{padding:6px 18px 10px; display:flex; align-items:center; justify-content:space-between;}
+.admin-head .l{display:flex; align-items:center; gap:10px;}
+.admin-head .l svg{width:22px;height:22px; color:var(--accent);}
+.admin-head h1{font-size:19px; font-weight:800;}
+.admin-head .sub{font-size:11px; color:var(--text-dim);}
+.admin-tabs{display:flex; gap:8px; padding:0 16px 12px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+.admin-tabs::-webkit-scrollbar{display:none;}
+.admin-tab{
+  flex-shrink:0; display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700;
+  padding:9px 14px; border-radius:10px; border:1px solid var(--border-soft); color:var(--text-dim); background:var(--bg-elevated);
+  white-space:nowrap;
+}
+.admin-tab.on{background:var(--accent); color:#04240a; border-color:var(--accent);}
+.admin-tab svg{width:15px;height:15px;}
+
+.offer-banner{
+  margin:0 16px 14px; padding:14px 16px; border-radius:14px;
+  background:linear-gradient(135deg, rgba(57,255,20,0.1), rgba(57,255,20,0.02));
+  border:1px solid rgba(57,255,20,0.25);
+}
+.offer-banner .t{font-size:14px; font-weight:800; margin-bottom:2px;}
+.offer-banner .d{font-size:11.5px; color:var(--text-dim); margin-bottom:10px;}
+.offer-banner .tiers{display:flex; gap:8px; margin-bottom:12px;}
+.offer-banner .tier{font-size:11px; font-weight:700; padding:4px 10px; border-radius:14px; border:1px solid var(--border);}
+.offer-banner .tier.on{background:var(--accent); color:#04240a; border-color:var(--accent);}
+.offer-banner .prog-label{display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-bottom:6px;}
+.offer-banner .prog{height:5px; background:var(--border-soft); border-radius:4px; overflow:hidden;}
+.offer-banner .prog-fill{height:100%; width:0%; background:var(--accent);}
+
+.grp-label{font-size:10.5px; font-weight:800; letter-spacing:1.5px; color:var(--text-faint); padding:14px 16px 8px;}
+.grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; padding:0 16px;}
+.admin-card{
+  position:relative; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px;
+  padding:16px 8px 12px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;
+}
+.admin-card svg{width:20px;height:20px; color:#ddd;}
+.admin-card span{font-size:12px; font-weight:600;}
+.admin-card .vtag{position:absolute; top:8px; right:8px; font-size:8.5px; font-weight:800; color:var(--accent); background:rgba(57,255,20,0.1); border:1px solid rgba(57,255,20,0.3); padding:1px 5px; border-radius:6px;}
+
+.field-block{margin:0 16px 16px;}
+.field-block label{
+  display:flex; align-items:center; gap:6px;
+  font-size:10.5px; font-weight:800; letter-spacing:1px; color:var(--text-faint); margin-bottom:8px; text-transform:uppercase;
+}
+.field-block input, .field-block textarea, .field-block select{
+  width:100%; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px;
+  padding:13px 14px; color:#fff; font-size:16px; font-family:inherit;
+}
+.field-block textarea{min-height:80px; resize:vertical;}
+.field-block input::placeholder, .field-block textarea::placeholder{color:var(--text-faint);}
+
+.toggle-row{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px;
+  padding:14px 16px; margin:0 16px 12px;
+}
+.toggle-row .t{font-size:13.5px; font-weight:700;}
+.toggle-row .d{font-size:11.5px; color:var(--text-dim); margin-top:3px; line-height:1.4;}
+.switch{width:42px; height:25px; border-radius:14px; background:var(--border-soft); position:relative; flex-shrink:0; border:1px solid var(--border);}
+.switch.on{background:var(--accent);}
+.switch::after{content:''; position:absolute; top:2px; left:2px; width:19px; height:19px; border-radius:50%; background:#fff; transition:.15s;}
+.switch.on::after{left:19px; background:#04240a;}
+
+.saved-tag{font-size:9.5px; font-weight:800; color:#04240a; background:#ffb020; padding:2px 8px; border-radius:6px; margin-left:8px; letter-spacing:.5px;}
+
+.priceline{
+  display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin:0 16px 10px; align-items:center;
+}
+.priceline input{background:var(--bg-card); border:1px solid var(--border-soft); border-radius:10px; padding:12px 10px; color:#fff; font-size:16px; min-width:0;}
+.priceline .del{color:var(--danger); display:flex; align-items:center; justify-content:center;}
+
+.upload-box{
+  aspect-ratio:1; background:var(--bg-card); border:1px dashed var(--border); border-radius:12px;
+  display:flex; align-items:center; justify-content:center; color:var(--text-faint);
+}
+.media-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 16px 14px;}
+.media-grid .lbl{font-size:11px; color:var(--text-dim); margin-bottom:6px; display:block;}
+
+.search-row{display:flex; gap:10px; margin:0 16px 14px; align-items:center;}
+.search-box{
+  flex:1; display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px solid var(--border-soft);
+  border-radius:12px; padding:11px 14px; color:var(--text-faint); font-size:13.5px;
+}
+.search-box svg{width:16px;height:16px;}
+.chip-row{display:flex; gap:8px; padding:0 16px 12px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+.chip-row::-webkit-scrollbar{display:none;}
+.chip{flex-shrink:0; font-size:12px; font-weight:700; padding:7px 13px; border-radius:20px; border:1px solid var(--border-soft); color:var(--text-dim); background:var(--bg-card); white-space:nowrap;}
+.chip.on{background:var(--accent); color:#04240a; border-color:var(--accent);}
+
+.stat3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:0 16px 16px;}
+.stat3 .box{background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px; padding:12px 8px; text-align:center;}
+.stat3 .box .v{font-size:16px; font-weight:800;}
+.stat3 .box .v.green{color:var(--accent);}
+.stat3 .box .v.red{color:var(--danger);}
+.stat3 .box .l{font-size:9px; color:var(--text-faint); font-weight:700; letter-spacing:.4px; margin-top:4px;}
+
+.big-stat{margin:0 16px 16px;}
+.big-stat .l{font-size:10.5px; font-weight:800; letter-spacing:1px; color:var(--text-faint); margin-bottom:4px;}
+.big-stat .v{font-size:32px; font-weight:800;}
+
+.date-tabs{display:flex; gap:6px; margin:0 16px 14px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+.date-tabs::-webkit-scrollbar{display:none;}
+.date-tabs span{flex-shrink:0; font-size:12px; font-weight:700; padding:7px 12px; border-radius:8px; color:var(--text-dim); background:var(--bg-card); border:1px solid var(--border-soft);}
+.date-tabs span.on{background:var(--accent); color:#04240a; border-color:var(--accent);}
+
+.list-row{display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border-soft); font-size:13px;}
+.list-row .k{color:var(--text-dim);}
+.list-row .v{font-weight:700;}
+
+.two-col{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 16px 14px;}
+.two-col .box{background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px; padding:12px;}
+.two-col .box h4{font-size:11.5px; font-weight:800; margin-bottom:8px; display:flex; align-items:center; gap:5px;}
+.two-col .box .row{display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-dim); padding:3px 0;}
+.two-col .box .row b{color:#fff; font-weight:700;}
+
+.user-row{
+  display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border-soft);
+  border-radius:12px; padding:12px 14px; margin:0 16px 10px;
+}
+.user-row .name{font-size:13px; font-weight:700;}
+.user-row .meta{font-size:10.5px; color:var(--text-faint); margin-top:2px;}
+.toggle-inline{display:flex; gap:8px; margin:0 16px 10px;}
+.toggle-inline button{flex:1; font-size:12px; font-weight:700; padding:9px; border-radius:10px; border:1px solid var(--border-soft); color:var(--text-dim); background:var(--bg-card);}
+.toggle-inline button.on{background:var(--accent); color:#04240a; border-color:var(--accent);}
+
+.color-swatches{display:flex; gap:10px; padding:0 16px 12px; flex-wrap:wrap;}
+.swatch{width:34px;height:34px;border-radius:50%; border:2px solid transparent;}
+.swatch.on{border-color:#fff; box-shadow:0 0 0 2px var(--bg);}
+.hexrow{display:flex; align-items:center; gap:10px; margin:0 16px 16px;}
+.hexrow .swatch-preview{width:34px;height:34px;border-radius:8px; flex-shrink:0;}
+.hexrow input{flex:1; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:10px; padding:12px; color:#fff; font-size:16px;}
+
+.font-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 16px 14px;}
+.font-card{background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px; padding:14px; text-align:center;}
+.font-card .aa{font-size:20px; font-weight:700;}
+.font-card .name{font-size:10.5px; color:var(--text-dim); margin-top:4px;}
+.font-card.on{border-color:var(--accent);}
+
+.anim-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 16px 14px;}
+.anim-card{background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px; padding:14px; text-align:center;}
+.anim-card.on{border-color:var(--accent); background:rgba(57,255,20,0.06);}
+.anim-card .t{font-size:12.5px; font-weight:700; margin:4px 0 2px;}
+.anim-card .d{font-size:10px; color:var(--text-faint); line-height:1.3;}
+
+.info-note{
+  margin:0 16px 16px; padding:12px 14px; border-radius:12px; background:rgba(57,255,20,0.06);
+  border:1px solid rgba(57,255,20,0.2); font-size:11.5px; color:#a9d9a1; line-height:1.5;
+}
+
+/* ---------- toast ---------- */
+.toast-el{
+  position:absolute; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px);
+  background:#1a1a1a; color:#fff; border:1px solid var(--accent); font-size:13px; font-weight:600;
+  padding:11px 20px; border-radius:30px; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;
+  z-index:2000; white-space:nowrap; box-shadow:0 8px 24px rgba(0,0,0,0.5);
+}
+.toast-el.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* ---------- scrolling marquee text ---------- */
+.marquee-wrap{overflow:hidden; white-space:nowrap; margin:6px 0 0; padding:6px 0; border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft);}
+.marquee-track{display:inline-block; padding-left:100%; animation:marquee 16s linear infinite; font-size:11.5px; font-weight:600; color:var(--accent); letter-spacing:.3px;}
+@keyframes marquee{from{transform:translateX(0);} to{transform:translateX(-100%);}}
+
+/* ---------- home options chips ---------- */
+.home-opts{display:flex; gap:8px; padding:4px 16px 4px; flex-wrap:wrap;}
+.home-opt-chip{font-size:12px; font-weight:700; color:var(--accent); background:rgba(57,255,20,0.08); border:1px solid rgba(57,255,20,0.3); padding:7px 14px; border-radius:20px;}
+
+/* ---------- product grid ---------- */
+.product-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:14px 16px 4px;}
+.product-card{
+  background:var(--bg-card); border:1px solid var(--border-soft); border-radius:16px; overflow:hidden;
+  text-align:left; display:flex; flex-direction:column;
+}
+.product-thumb{
+  aspect-ratio:1; background:#000; display:flex; align-items:center; justify-content:center; color:var(--text-faint);
+  overflow:hidden;
+}
+.product-thumb img, .product-thumb video{width:100%; height:100%; object-fit:cover;}
+.product-info{padding:10px 12px 12px;}
+.product-name{font-size:13px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.product-price{font-size:12px; color:var(--accent); font-weight:700; margin-top:3px;}
+
+/* ---------- falling particles animation ---------- */
+.particle-layer{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:5;}
+.particle{position:absolute; top:-40px; animation:fall linear infinite; font-size:18px;}
+@keyframes fall{to{transform:translateY(120vh) rotate(220deg);}}
+
+/* ---------- lock screen (verification gate) ---------- */
+.lock-screen{
+  position:absolute; inset:0; z-index:5000;
+  background:radial-gradient(ellipse at 50% 30%, rgba(57,255,20,0.08), transparent 60%), var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:30px;
+  text-align:center;
+}
+.lock-screen .icon-circle{width:64px;height:64px;}
+.lock-screen input{
+  width:100%; max-width:260px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px;
+  padding:14px; color:#fff; font-size:16px; text-align:center; letter-spacing:3px;
+}
+.lock-screen .err{color:var(--danger); font-size:12.5px; font-weight:600; min-height:16px;}
+
+/* Premium verification gate variant */
+.verif-gate-badge{
+  font-size:10.5px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;
+  color:var(--accent); background:rgba(57,255,20,0.09); border:1px solid rgba(57,255,20,0.35);
+  padding:6px 14px; border-radius:20px;
+}
+.verif-gate-badge.rejected{
+  color:var(--danger); background:rgba(255,77,77,0.09); border-color:rgba(255,77,77,0.35);
+}
+.verif-gate-ring{
+  width:88px; height:88px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle, rgba(57,255,20,0.14), transparent 70%);
+  border:1.5px solid rgba(57,255,20,0.4);
+  box-shadow:0 0 0 6px rgba(57,255,20,0.05), 0 0 40px rgba(57,255,20,0.25);
+  color:var(--accent);
+  animation:verifPulse 2.2s ease-in-out infinite;
+}
+.verif-gate-ring.rejected{
+  background:radial-gradient(circle, rgba(255,77,77,0.14), transparent 70%);
+  border-color:rgba(255,77,77,0.4);
+  box-shadow:0 0 0 6px rgba(255,77,77,0.05), 0 0 40px rgba(255,77,77,0.25);
+  color:var(--danger);
+  animation:none;
+}
+.verif-gate-ring svg{width:32px;height:32px;}
+@keyframes verifPulse{
+  0%,100%{box-shadow:0 0 0 6px rgba(57,255,20,0.05), 0 0 40px rgba(57,255,20,0.25);}
+  50%{box-shadow:0 0 0 10px rgba(57,255,20,0.09), 0 0 60px rgba(57,255,20,0.4);}
+}
+.verif-gate-title{font-size:19px; font-weight:800; color:#fff; letter-spacing:0.2px;}
+.verif-gate-text{font-size:13.5px; color:var(--text-dim); max-width:270px; line-height:1.65;}
+.verif-gate-dots{display:flex; gap:6px; margin-top:2px;}
+.verif-gate-dots span{
+  width:6px; height:6px; border-radius:50%; background:var(--accent); opacity:0.3;
+  animation:verifDot 1.4s ease-in-out infinite;
+}
+.verif-gate-dots span:nth-child(2){animation-delay:0.2s;}
+.verif-gate-dots span:nth-child(3){animation-delay:0.4s;}
+@keyframes verifDot{0%,80%,100%{opacity:0.25; transform:scale(0.9);} 40%{opacity:1; transform:scale(1.15);}}
+
+/* ---------- opening intro animation ---------- */
+.intro-overlay{
+  position:fixed; inset:0; z-index:9999; background:var(--bg);
+  display:flex; align-items:center; justify-content:center;
+  animation:introFade 0.5s ease-out 1.4s forwards;
+}
+.intro-overlay .ring{
+  width:90px; height:90px; border-radius:50%; border:3px solid var(--accent);
+}
+.intro-pulse .ring{animation:introPulse 1.1s ease-out infinite;}
+.intro-glow .ring{box-shadow:0 0 60px 20px var(--accent); border:none; background:var(--accent); opacity:.8; animation:introGlow 1.2s ease-in-out infinite;}
+.intro-rays .ring{border:3px dashed var(--accent); animation:introSpin 1.4s linear infinite;}
+.intro-orbit .ring{border:3px dotted var(--accent); animation:introSpin 0.9s linear infinite;}
+.intro-neon .ring{animation:introNeon 0.6s steps(2) infinite;}
+@keyframes introFade{to{opacity:0; visibility:hidden;}}
+@keyframes introPulse{0%{transform:scale(0.6); opacity:1;} 100%{transform:scale(1.6); opacity:0;}}
+@keyframes introGlow{0%,100%{opacity:.5;} 50%{opacity:1;}}
+@keyframes introSpin{to{transform:rotate(360deg);}}
+@keyframes introNeon{0%{filter:hue-rotate(0deg);} 100%{filter:hue-rotate(30deg);}}
+</style>
+<!-- Telegram Mini App SDK: gives us the REAL usable viewport height inside Telegram's
+     in-app browser. Regular CSS vh/dvh is unreliable inside Telegram's WebView on mobile —
+     this is why it looked fine in a normal PC/phone browser but broke inside the actual bot. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- Safe-area spacer: on a real phone the OS status bar/notch sits above this, no need to fake one -->
+  <div class="safe-top"></div>
+
+  <!-- ============ VIEWS ROOT ============ -->
+  <div id="views"></div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottomnav" id="bottomnav"></div>
+
+</div>
+
+<script>
+const NAV_ITEMS_BASE = [
+  {id:'home', get label(){return t('nav_home');}, icon:'home', always:true},
+  {id:'infos', get label(){return t('nav_infos');}, icon:'info', settingKey:'navInfos'},
+  {id:'carte', get label(){return t('nav_carte');}, icon:'pin', settingKey:'navCarte'},
+  {id:'panier', get label(){return t('nav_panier');}, icon:'cart', always:true},
+  {id:'avis', get label(){return t('nav_avis');}, icon:'star', settingKey:'navAvis'},
+  {id:'chat', get label(){return t('nav_chat');}, icon:'chat', settingKey:'navSupport'},
+  {id:'contact', get label(){return t('nav_contact');}, icon:'mail', always:true},
+  {id:'profil', get label(){return t('nav_profil');}, icon:'profil', pill:true, always:true},
+  {id:'admin', get label(){return t('nav_admin');}, icon:'admin', pill:true, badge:true, adminOnly:true},
+];
+function getNavItems(){
+  return NAV_ITEMS_BASE.filter(i=>{
+    if(i.adminOnly) return IS_ADMIN;
+    return i.always || SETTINGS[i.settingKey];
+  });
+}
+
+const ICONS = {
+  home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5Z"/></svg>',
+  info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/></svg>',
+  cart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 12.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="10" cy="21" r="1.3"/><circle cx="17" cy="21" r="1.3"/></svg>',
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>',
+  starfull:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>',
+  chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.4-6.5"/><path d="M21 3v6h-6"/></svg>',
+  chatround:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 1 3.4 6.5L3 20l1.5-4.2A7.96 7.96 0 0 1 4 12Z"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+  profil:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>',
+  admin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-4Z"/></svg>',
+  bag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20.5L6 7Z"/><path d="M9 7V6a3 3 0 0 1 6 0v1"/></svg>',
+  chevdown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  chevright:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  close:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  arrowup:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>',
+  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 19c1-3.3 3.6-5 6.5-5s5.5 1.7 6.5 5"/><circle cx="17.5" cy="8.5" r="2.6"/><path d="M15.8 14.2c2.3.3 4.1 1.8 4.9 4.6"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>;',
+  card:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15h.01M2 8h20M2 10.5h20M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>',
+  bitcoin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 8h3.5a2 2 0 1 1 0 4H9.5m0 0h4a2 2 0 1 1 0 4H9.5m0-8V6m0 12v-2m3-10V6m0 12v-2"/></svg>',
+  question:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.3 1-1.3 1.9v.3"/><path d="M12 17.2v.01"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-17l19 8.5-19 8.5Zm2-2.6L16.7 12 5 6.1v4.5l7.6 1.4L5 13.4v4.5Z"/></svg>',
+  location:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg>',
+  globe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg>',
+  layers:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  refresh:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.4L21 8M3 12a9 9 0 0 0 15.3 6.4L21 16M21 8V3m0 5h-5M21 16v5m0-5h-5"/></svg>',
+  crown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4 3 5-6 5 6 4-3-2 10H5L3 8Z"/></svg>',
+  folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/></svg>',
+  chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+  tag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.6 12.6 20 4 11.4V4h7.4L20 12.6Z"/><circle cx="8.3" cy="8.3" r="1.3"/></svg>',
+  coin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2 0 0 1 5 0c0 2-5 1.5-5 3.5a2.5 2 0 0 0 5 0"/></svg>',
+  gift:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="12" rx="1"/><path d="M3 9V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3M12 4v17M12 9c-1.5-3-6-4-6-1s4.5 2 6 1Zm0 0c1.5-3 6-4 6-1s-4.5 2-6 1Z"/></svg>',
+  dice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
+  link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15 15 9M8.5 12 6 14.5a3.5 3.5 0 0 0 5 5L13.5 17M15.5 12 18 9.5a3.5 3.5 0 0 0-5-5L10.5 7"/></svg>',
+  palette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 1 1 0-18c4 0 8 2.5 8 6.5 0 2-1.5 3.5-3.5 3.5H15a1.8 1.8 0 0 0-1.2 3.1c.4.4.4 1-.1 1.3-.5.4-1.2.6-1.7.6Z"/><circle cx="7.2" cy="12" r="1"/><circle cx="8.8" cy="8" r="1"/><circle cx="13" cy="6.5" r="1"/></svg>',
+  shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/></svg>',
+  eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>',
+  image:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m5 18 5-5 3.5 3.5L18 12l3 3"/></svg>',
+  fire:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-3 4-3 8a3 3 0 0 0 6 0c1.5 1 2 3 2 4.5A5.5 5.5 0 0 1 11.5 20 6.5 6.5 0 0 1 5 13.5C5 8 12 6 12 2Z"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>',
+};
+function ic(name,cls){return `<span class="${cls||''}" style="display:inline-flex">${ICONS[name]||''}</span>`;}
+
+/* ================= SETTINGS ENGINE (makes the admin panel real) ================= */
+const DEFAULT_SETTINGS = {
+  bandeauName:'MON SHOP',
+  brand:'IMAGESTACKS', slogan:'Collection Premium', cta:'Explorer',
+  bannerEnabled:true,
+  themeColor:'#39FF14', navbarColor:'#FF1493', cardBg:'', navbarBg:'',
+  defaultLang:'auto',
+  navInfos:true, navCarte:true, navSupport:true, navAvis:true,
+  scrollEnabled:false, scrollText:'🚚 Livraison rapide partout en France · Paiement sécurisé',
+  font:'Inter',
+  animLeaves:false, animHeli:false, animMoney:false,
+  homeOptions:['','','','',''],
+  likesEnabled:false, mixedPricing:false, productLikes:false, notifsEnabled:false, cryptoAuto:false,
+  bonusEnabled:false,
+  reportedOnly:false,
+  supportAutoDelete:'never', // never | 24h | 1week
+  secureMode:false, securePassword:'',
+  openAnimEnabled:true, openAnim:'none',
+  musicEnabled:false, musicTracks:[],
+  bgImage:'',
+  // Infos tab (editable from admin)
+  infosLivraisonMin:'50',
+  infosMeetupEnabled:true, infosMeetupCity:'Lyon', infosMeetupHours:'14h - 23h', infosMeetupMin:'50',
+  infosEnvoiEnabled:true, infosBitcoinMin:'100',
+  infosFaqText:'Comment recevoir ma commande ? ou un meetup ? Les méthodes disponibles et leurs prix sont affichés au moment de commander.',
+  snapchatUsername:'soucoupe62',
+  categories:[],
+};
+
+/* ================= SUPABASE (shared backend — every visitor sees the same data) ================= */
+const SUPABASE_URL = 'https://dhmknkrkqbkapgrzivmf.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_1inGuNU6lZyf90SLSEusBw_KrlOn-V3';
+// Some sandboxed preview environments wrap window.fetch with a postMessage-relayed proxy
+// that can't structured-clone a Headers object, throwing "DataCloneError" on every request.
+// Binding fetch explicitly here avoids that wrapper in most cases; real browsers and Telegram's
+// WebView are unaffected either way.
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: { fetch: (...args) => window.fetch(...args) }
+});
+
+function getVisitorId(){
+  const tgUser = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+  if(tgUser && tgUser.id) return 'tg_'+tgUser.id;
+  let vid = localStorage.getItem('soucoupe62_visitor_id');
+  if(!vid){ vid = 'anon_'+Math.random().toString(36).slice(2)+Date.now(); localStorage.setItem('soucoupe62_visitor_id', vid); }
+  return vid;
+}
+function getVisitorName(){
+  const tgUser = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+  if(tgUser) return [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || tgUser.username || 'Client';
+  return 'Client';
+}
+const VISITOR_ID = getVisitorId();
+const VISITOR_NAME = getVisitorName();
+
+/* Admin gate: only this Telegram account sees the Admin tab/panel.
+   NOTE: this is a client-side-only check (not cryptographically verified against
+   Telegram's signature) — good enough to keep the admin button hidden from regular
+   customers, but someone with real technical skill could still reach the API directly.
+   Outside of Telegram (plain browser, during development) the check is skipped so you
+   can still access the admin panel while testing. */
+const ADMIN_TELEGRAM_IDS = ['8311625659'];
+function getTgUser(){
+  return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+}
+function computeIsAdmin(){
+  const tgUser = getTgUser();
+  if(!tgUser) return true; // not running inside Telegram at all -> assume dev/owner testing in a normal browser
+  return ADMIN_TELEGRAM_IDS.includes(String(tgUser.id));
+}
+const IS_ADMIN = computeIsAdmin();
+
+/* Device hint: a random id kept in this browser's storage regardless of which Telegram
+   account is active — lets the admin spot "this device already showed up under a
+   different account" without pretending to know for certain it's the same person. */
+function getDeviceHint(){
+  let h = localStorage.getItem('soucoupe62_device_hint');
+  if(!h){ h = 'dev_'+Math.random().toString(36).slice(2)+Date.now(); localStorage.setItem('soucoupe62_device_hint', h); }
+  return h;
+}
+const DEVICE_HINT = getDeviceHint();
+
+/* ---------------- VISITOR VERIFICATION ---------------- */
+let MY_VISITOR_STATUS = 'approved'; // default: non-Telegram / dev context is never gated
+let MY_VISITOR_CREATED_AT = null;
+async function getApproxLocation(){
+  try{
+    const ctrl = new AbortController();
+    const timeout = setTimeout(()=>ctrl.abort(), 3500);
+    const res = await fetch('https://ipapi.co/json/', {signal: ctrl.signal});
+    clearTimeout(timeout);
+    const data = await res.json();
+    return {city: data.city||'', country: data.country_name||''};
+  }catch(e){ return {city:'', country:''}; }
+}
+async function registerAndCheckVisitor(){
+  const tgUser = getTgUser();
+  if(!tgUser || IS_ADMIN){ MY_VISITOR_STATUS='approved'; return; } // no Telegram identity, or it's the shop owner -> never gate
+  const tid = String(tgUser.id);
+  try{
+    const {data:existing} = await sb.from('miniapp_visitors').select('status, created_at').eq('telegram_id', tid).single();
+    if(existing){ MY_VISITOR_STATUS = existing.status; MY_VISITOR_CREATED_AT = existing.created_at; return; }
+  }catch(e){ /* no row yet -> fall through to insert */ }
+  const loc = await getApproxLocation();
+  try{
+    const {data:inserted} = await sb.from('miniapp_visitors').insert({
+      telegram_id: tid, first_name: tgUser.first_name||'', last_name: tgUser.last_name||'',
+      username: tgUser.username||'', language_code: tgUser.language_code||'', is_premium: !!tgUser.is_premium,
+      photo_url: tgUser.photo_url||'', device_hint: DEVICE_HINT, status:'pending',
+      user_agent: navigator.userAgent||'', platform: navigator.platform||'',
+      allows_write_to_pm: tgUser.allows_write_to_pm===undefined ? null : !!tgUser.allows_write_to_pm,
+      approx_city: loc.city, approx_country: loc.country,
+    }).select('created_at').single();
+    MY_VISITOR_STATUS = 'pending';
+    MY_VISITOR_CREATED_AT = inserted ? inserted.created_at : new Date().toISOString();
+  }catch(e){ logSbError('registerVisitor', e); MY_VISITOR_STATUS='approved'; } // fail open rather than lock out everyone if the table has an issue
+}
+let visitorPollTimer=null;
+function startVisitorStatusPolling(){
+  clearInterval(visitorPollTimer);
+  const tgUser = getTgUser();
+  if(!tgUser) return;
+  const tid = String(tgUser.id);
+  visitorPollTimer = setInterval(async ()=>{
+    try{
+      const {data} = await sb.from('miniapp_visitors').select('status').eq('telegram_id', tid).single();
+      if(data && data.status!==MY_VISITOR_STATUS){
+        MY_VISITOR_STATUS = data.status;
+      }
+      renderVerificationGateIfNeeded(); // also re-checks elapsed time, to reveal the contact button after 1h
+    }catch(e){}
+  }, 4000);
+}
+const VERIF_CONTACT_TELEGRAM = 'soucoupe62'; // @username sans le @, contacté après 1h d'attente
+function renderVerificationGateIfNeeded(){
+  const existing = document.getElementById('verifGate');
+  if(MY_VISITOR_STATUS==='pending' || MY_VISITOR_STATUS==='rejected'){
+    const app=document.getElementById('app');
+    const el = existing || document.createElement('div');
+    el.id='verifGate';
+    el.className='lock-screen';
+    el.style.zIndex='6000';
+    const waitedOverHour = MY_VISITOR_CREATED_AT && (Date.now() - new Date(MY_VISITOR_CREATED_AT).getTime()) >= 60*60*1000;
+    const contactBtn = (MY_VISITOR_STATUS==='pending' && waitedOverHour) ? `
+      <a href="https://t.me/${VERIF_CONTACT_TELEGRAM}" target="_blank" class="btn-primary" style="max-width:260px; margin-top:4px; text-decoration:none;">
+        ${ic('send')} Contacter @${VERIF_CONTACT_TELEGRAM}
+      </a>` : '';
+    if(MY_VISITOR_STATUS==='pending'){
+      el.innerHTML = `
+        <span class="verif-gate-badge">Accès restreint</span>
+        <div class="verif-gate-ring">${ic('clock')}</div>
+        <div class="verif-gate-title">En attente de vérification</div>
+        <div class="verif-gate-text">La boutique doit valider ton accès avant que tu puisses voir la mini-app. Reviens dans quelques instants.</div>
+        <div class="verif-gate-dots"><span></span><span></span><span></span></div>
+        ${contactBtn}
+      `;
+    } else {
+      el.innerHTML = `
+        <span class="verif-gate-badge rejected">Accès restreint</span>
+        <div class="verif-gate-ring rejected">${ic('close')}</div>
+        <div class="verif-gate-title">Accès refusé</div>
+        <div class="verif-gate-text">La boutique n'a pas validé ton accès à cette mini-app.</div>
+        <a href="https://t.me/${VERIF_CONTACT_TELEGRAM}" target="_blank" class="btn-primary" style="max-width:260px; margin-top:4px; text-decoration:none;">${ic('send')} Contacter @${VERIF_CONTACT_TELEGRAM}</a>
+      `;
+    }
+    if(!existing) app.appendChild(el);
+  } else {
+    if(existing) existing.remove();
+    clearInterval(visitorPollTimer);
+  }
+}
+
+let PRODUCTS = [];
+function logSbError(context, e){
+  const msg = (e && (e.message || e.error_description || e.hint || e.details)) || String(e);
+  console.error('['+context+']', msg, e && e.code ? '(code: '+e.code+')' : '');
+  return msg;
+}
+async function withRetry(fn, attempts){
+  attempts = attempts||3;
+  let lastErr;
+  for(let i=0;i<attempts;i++){
+    try{ return await fn(); }
+    catch(e){ lastErr=e; if(i<attempts-1) await new Promise(r=>setTimeout(r, 500*(i+1))); }
+  }
+  throw lastErr;
+}
+
+async function loadProducts(){
+  try{
+    const {data, error} = await withRetry(()=>sb.from('miniapp_products').select('*').order('created_at', {ascending:true}));
+    if(error) throw error;
+    PRODUCTS = (data||[]).map(row=>({
+      id: row.id, name: row.name, description: row.description||'', category: row.category||'', farm: row.farm||'',
+      promoEnabled: row.promo_enabled, prices: row.prices||[], media: row.media||[],
+      bestSeller: !!row.best_seller, mostProfitable: !!row.most_profitable,
+    }));
+  }catch(e){ logSbError('loadProducts', e); PRODUCTS = []; }
+}
+async function upsertProductRemote(product){
+  try{
+    const {error} = await sb.from('miniapp_products').upsert({
+      id: product.id, name: product.name, description: product.description, category: product.category, farm: product.farm,
+      promo_enabled: product.promoEnabled, prices: product.prices, media: product.media,
+      best_seller: !!product.bestSeller, most_profitable: !!product.mostProfitable, updated_at: new Date().toISOString(),
+    });
+    if(error) throw error;
+    return true;
+  }catch(e){ logSbError('saveProduct', e); return false; }
+}
+async function deleteProductRemote(id){
+  try{ const {error} = await sb.from('miniapp_products').delete().eq('id', id); if(error) throw error; return true; }
+  catch(e){ logSbError('deleteProduct', e); return false; }
+}
+
+let SETTINGS = {};
+let lastSettingsLoadFailed = false;
+async function loadSettings(){
+  let stored = {};
+  lastSettingsLoadFailed = false;
+  try{
+    const {data, error} = await withRetry(()=>sb.from('miniapp_settings').select('data').eq('id',1).single());
+    if(error) throw error;
+    stored = data && data.data ? data.data : {};
+  }catch(e){ logSbError('loadSettings', e); lastSettingsLoadFailed = true; }
+  SETTINGS = Object.assign({}, DEFAULT_SETTINGS, stored);
+}
+async function persistSettings(){
+  try{
+    const {error} = await sb.from('miniapp_settings').upsert({id:1, data:SETTINGS, updated_at:new Date().toISOString()});
+    if(error) throw error;
+    return true;
+  }catch(e){ console.error('persistSettings failed', e); return false; }
+}
+function shadeColor(hex, percent){
+  try{
+    let r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+    r=Math.max(0,Math.min(255,Math.round(r+(percent/100)*255)));
+    g=Math.max(0,Math.min(255,Math.round(g+(percent/100)*255)));
+    b=Math.max(0,Math.min(255,Math.round(b+(percent/100)*255)));
+    return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+  }catch(e){ return hex; }
+}
+let loadedFonts={};
+function ensureFontLoaded(font){
+  if(font==='Inter' || loadedFonts[font]) return;
+  const link=document.createElement('link');
+  link.rel='stylesheet';
+  link.href='https://fonts.googleapis.com/css2?family='+font.replace(/ /g,'+')+':wght@400;600;700;800&display=swap';
+  document.head.appendChild(link);
+  loadedFonts[font]=true;
+}
+function applySettings(){
+  const root=document.documentElement.style;
+  root.setProperty('--accent', SETTINGS.themeColor);
+  root.setProperty('--accent-dim', shadeColor(SETTINGS.themeColor,-18));
+  root.setProperty('--navbar-accent', SETTINGS.navbarColor);
+  root.setProperty('--bg-card', SETTINGS.cardBg || '#111a11');
+  root.setProperty('--navbar-bg', SETTINGS.navbarBg || 'rgba(8,10,8,0.98)');
+  ensureFontLoaded(SETTINGS.font);
+  document.body.style.fontFamily = `'${SETTINGS.font}', 'Inter', -apple-system, sans-serif`;
+  document.title = SETTINGS.bandeauName || 'Mini App';
+  const app=document.getElementById('app');
+  if(app) app.style.backgroundImage = SETTINGS.bgImage ? `url(${SETTINGS.bgImage})` : '';
+  if(app) app.style.backgroundSize='cover';
+  if(app) app.style.backgroundPosition='center';
+  if(typeof refreshMusicPlayer==='function') refreshMusicPlayer();
+}
+async function setSetting(key, value, opts){
+  SETTINGS[key]=value;
+  applySettings();
+  if(!(opts && opts.silent)) go(currentView);
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  if(opts && opts.toast) toast(opts.toast);
+}
+function toggleSetting(key, toastMsg){
+  setSetting(key, !SETTINGS[key], {toast:toastMsg});
+}
+let toastTimer=null;
+function toast(msg){
+  let el=document.getElementById('toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='toast';
+    el.className='toast-el';
+    document.getElementById('app').appendChild(el);
+  }
+  el.textContent=msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'), 1800);
+}
+
+const SHOP = {
+  avatar:'L', name:'Laperle',
+  get brand(){return SETTINGS.brand;},
+  get slogan(){return SETTINGS.slogan;},
+  get cta(){return SETTINGS.cta;},
+};
+
+/* ================= I18N ================= */
+let currentLang = 'fr';
+const I18N = {
+  fr:{
+    nav_home:'Accueil', nav_infos:'Infos', nav_carte:'Carte', nav_panier:'Panier', nav_avis:'Avis', nav_chat:'Chat', nav_contact:'Contact', nav_profil:'Profil', nav_admin:'Admin',
+    retour:'Retour', fermer:'Fermer',
+    live:'LIVE', since:'DEPUIS · 2026', petite_serie:'PETITE SÉRIE', defiler:'DÉFILER', bienvenue:'BIENVENUE',
+    produit_count:'0 produit', categories:'Catégories', farms:'Farms', catalog_soon:'Notre catalogue sera bientôt disponible.',
+    infos_title:'Infos', livraison:'Livraison', minimum:'Minimum', meetup:'Meetup', disponible:'Disponible', horaires_rdv:'Horaires de rendez-vous',
+    service_envoi:"Service d'envoi", paiement_bitcoin:'Paiement Bitcoin', paiement:'Paiement', questions_frequentes:'Questions fréquentes',
+    faq_text:'Comment recevoir ma commande ? ou un meetup ? Les méthodes disponibles et leurs prix sont affichés au moment de commander.',
+    points_relais:'Points relais', adresses:'339 adresses',
+    panier_title:'Panier', panier_vide:'Panier vide', panier_vide_desc:'Ajoutez des produits depuis la boutique pour les retrouver ici.', parcourir_boutique:'Parcourir la boutique',
+    avis_title:'Avis clients', avis_count:'0 avis', aucun_avis:'Aucun avis pour le moment', commande_chez_nous:'Vous avez commandé chez nous ?', laisser_avis:'Laisser un avis',
+    chat_title:'Chat', messages_conserves:'Les messages sont conservés.', demarrer_conversation:'Démarrer une conversation', envoyez_message:"Envoyez un message pour obtenir de l'aide", input_placeholder:'Écrivez un message...',
+    contact_title:'Contact', choisissez_plateforme:'Choisissez votre plateforme', aucun_contact:'Aucun contact disponible', aucun_contact_desc:'Les options de contact apparaîtront ici dès que la boutique les aura ajoutées.',
+    mon_profil:'Mon profil', membre:'MEMBRE', membre_depuis:'Membre depuis', commandes:'Commandes', langue:'LANGUE', mes_commandes:'MES COMMANDES', aucune_commande:'Aucune commande pour le moment',
+    explorer:'Explorer',
+  },
+  en:{
+    nav_home:'Home', nav_infos:'Info', nav_carte:'Map', nav_panier:'Cart', nav_avis:'Reviews', nav_chat:'Chat', nav_contact:'Contact', nav_profil:'Profile', nav_admin:'Admin',
+    retour:'Back', fermer:'Close',
+    live:'LIVE', since:'SINCE · 2026', petite_serie:'LIMITED SERIES', defiler:'SCROLL', bienvenue:'WELCOME',
+    produit_count:'0 product', categories:'Categories', farms:'Farms', catalog_soon:'Our catalog will be available soon.',
+    infos_title:'Info', livraison:'Delivery', minimum:'Minimum', meetup:'Meetup', disponible:'Available', horaires_rdv:'Meetup hours',
+    service_envoi:'Shipping service', paiement_bitcoin:'Bitcoin payment', paiement:'Payment', questions_frequentes:'FAQ',
+    faq_text:'How do I get my order? Or arrange a meetup? Available methods and their prices are shown when you order.',
+    points_relais:'Pickup points', adresses:'339 addresses',
+    panier_title:'Cart', panier_vide:'Empty cart', panier_vide_desc:'Add products from the shop to find them here.', parcourir_boutique:'Browse the shop',
+    avis_title:'Customer reviews', avis_count:'0 reviews', aucun_avis:'No reviews yet', commande_chez_nous:'Have you ordered with us?', laisser_avis:'Leave a review',
+    chat_title:'Chat', messages_conserves:'Messages are kept.', demarrer_conversation:'Start a conversation', envoyez_message:'Send a message to get help', input_placeholder:'Write a message...',
+    contact_title:'Contact', choisissez_plateforme:'Choose your platform', aucun_contact:'No contact available', aucun_contact_desc:'Contact options will appear here once the shop adds them.',
+    mon_profil:'My profile', membre:'MEMBER', membre_depuis:'Member since', commandes:'Orders', langue:'LANGUAGE', mes_commandes:'MY ORDERS', aucune_commande:'No orders yet',
+    explorer:'Explore',
+  },
+  it:{
+    nav_home:'Home', nav_infos:'Info', nav_carte:'Mappa', nav_panier:'Carrello', nav_avis:'Recensioni', nav_chat:'Chat', nav_contact:'Contatto', nav_profil:'Profilo', nav_admin:'Admin',
+    retour:'Indietro', fermer:'Chiudi',
+    live:'LIVE', since:'DAL · 2026', petite_serie:'SERIE LIMITATA', defiler:'SCORRI', bienvenue:'BENVENUTO',
+    produit_count:'0 prodotti', categories:'Categorie', farms:'Farms', catalog_soon:'Il nostro catalogo sarà presto disponibile.',
+    infos_title:'Info', livraison:'Consegna', minimum:'Minimo', meetup:'Meetup', disponible:'Disponibile', horaires_rdv:"Orari d'incontro",
+    service_envoi:'Servizio di spedizione', paiement_bitcoin:'Pagamento Bitcoin', paiement:'Pagamento', questions_frequentes:'Domande frequenti',
+    faq_text:"Come ricevo il mio ordine? O un meetup? I metodi disponibili e i relativi prezzi vengono mostrati al momento dell'ordine.",
+    points_relais:'Punti di ritiro', adresses:'339 indirizzi',
+    panier_title:'Carrello', panier_vide:'Carrello vuoto', panier_vide_desc:'Aggiungi prodotti dal negozio per trovarli qui.', parcourir_boutique:'Sfoglia il negozio',
+    avis_title:'Recensioni clienti', avis_count:'0 recensioni', aucun_avis:'Ancora nessuna recensione', commande_chez_nous:'Hai già ordinato da noi?', laisser_avis:'Lascia una recensione',
+    chat_title:'Chat', messages_conserves:'I messaggi vengono conservati.', demarrer_conversation:'Inizia una conversazione', envoyez_message:'Invia un messaggio per ricevere aiuto', input_placeholder:'Scrivi un messaggio...',
+    contact_title:'Contatto', choisissez_plateforme:'Scegli la tua piattaforma', aucun_contact:'Nessun contatto disponibile', aucun_contact_desc:'Le opzioni di contatto appariranno qui non appena il negozio le aggiungerà.',
+    mon_profil:'Il mio profilo', membre:'MEMBRO', membre_depuis:'Membro dal', commandes:'Ordini', langue:'LINGUA', mes_commandes:'I MIEI ORDINI', aucune_commande:'Nessun ordine per ora',
+    explorer:'Esplora',
+  },
+  es:{
+    nav_home:'Inicio', nav_infos:'Info', nav_carte:'Mapa', nav_panier:'Carrito', nav_avis:'Reseñas', nav_chat:'Chat', nav_contact:'Contacto', nav_profil:'Perfil', nav_admin:'Admin',
+    retour:'Volver', fermer:'Cerrar',
+    live:'EN VIVO', since:'DESDE · 2026', petite_serie:'SERIE LIMITADA', defiler:'DESLIZAR', bienvenue:'BIENVENIDO',
+    produit_count:'0 productos', categories:'Categorías', farms:'Farms', catalog_soon:'Nuestro catálogo estará disponible pronto.',
+    infos_title:'Info', livraison:'Entrega', minimum:'Mínimo', meetup:'Meetup', disponible:'Disponible', horaires_rdv:'Horario de encuentro',
+    service_envoi:'Servicio de envío', paiement_bitcoin:'Pago en Bitcoin', paiement:'Pago', questions_frequentes:'Preguntas frecuentes',
+    faq_text:'¿Cómo recibo mi pedido? ¿O quedamos en persona? Los métodos disponibles y sus precios se muestran al hacer el pedido.',
+    points_relais:'Puntos de recogida', adresses:'339 direcciones',
+    panier_title:'Carrito', panier_vide:'Carrito vacío', panier_vide_desc:'Añade productos de la tienda para encontrarlos aquí.', parcourir_boutique:'Explorar la tienda',
+    avis_title:'Reseñas de clientes', avis_count:'0 reseñas', aucun_avis:'Aún no hay reseñas', commande_chez_nous:'¿Ya has comprado con nosotros?', laisser_avis:'Dejar una reseña',
+    chat_title:'Chat', messages_conserves:'Los mensajes se conservan.', demarrer_conversation:'Iniciar una conversación', envoyez_message:'Envía un mensaje para obtener ayuda', input_placeholder:'Escribe un mensaje...',
+    contact_title:'Contacto', choisissez_plateforme:'Elige tu plataforma', aucun_contact:'Ningún contacto disponible', aucun_contact_desc:'Las opciones de contacto aparecerán aquí en cuanto la tienda las añada.',
+    mon_profil:'Mi perfil', membre:'MIEMBRO', membre_depuis:'Miembro desde', commandes:'Pedidos', langue:'IDIOMA', mes_commandes:'MIS PEDIDOS', aucune_commande:'Sin pedidos por ahora',
+    explorer:'Explorar',
+  },
+  de:{
+    nav_home:'Start', nav_infos:'Infos', nav_carte:'Karte', nav_panier:'Warenkorb', nav_avis:'Bewertungen', nav_chat:'Chat', nav_contact:'Kontakt', nav_profil:'Profil', nav_admin:'Admin',
+    retour:'Zurück', fermer:'Schließen',
+    live:'LIVE', since:'SEIT · 2026', petite_serie:'LIMITIERTE SERIE', defiler:'SCROLLEN', bienvenue:'WILLKOMMEN',
+    produit_count:'0 Produkte', categories:'Kategorien', farms:'Farms', catalog_soon:'Unser Katalog ist bald verfügbar.',
+    infos_title:'Infos', livraison:'Lieferung', minimum:'Minimum', meetup:'Meetup', disponible:'Verfügbar', horaires_rdv:'Treffzeiten',
+    service_envoi:'Versanddienst', paiement_bitcoin:'Bitcoin-Zahlung', paiement:'Zahlung', questions_frequentes:'Häufige Fragen',
+    faq_text:'Wie erhalte ich meine Bestellung? Oder ein Meetup? Verfügbare Methoden und Preise werden bei der Bestellung angezeigt.',
+    points_relais:'Abholstationen', adresses:'339 Adressen',
+    panier_title:'Warenkorb', panier_vide:'Warenkorb leer', panier_vide_desc:'Füge Produkte aus dem Shop hinzu, um sie hier zu finden.', parcourir_boutique:'Shop durchstöbern',
+    avis_title:'Kundenbewertungen', avis_count:'0 Bewertungen', aucun_avis:'Noch keine Bewertungen', commande_chez_nous:'Hast du schon bei uns bestellt?', laisser_avis:'Bewertung abgeben',
+    chat_title:'Chat', messages_conserves:'Nachrichten werden gespeichert.', demarrer_conversation:'Unterhaltung starten', envoyez_message:'Sende eine Nachricht, um Hilfe zu erhalten', input_placeholder:'Nachricht schreiben...',
+    contact_title:'Kontakt', choisissez_plateforme:'Wähle deine Plattform', aucun_contact:'Kein Kontakt verfügbar', aucun_contact_desc:'Kontaktoptionen erscheinen hier, sobald der Shop sie hinzufügt.',
+    mon_profil:'Mein Profil', membre:'MITGLIED', membre_depuis:'Mitglied seit', commandes:'Bestellungen', langue:'SPRACHE', mes_commandes:'MEINE BESTELLUNGEN', aucune_commande:'Noch keine Bestellungen',
+    explorer:'Entdecken',
+  },
+  ar:{
+    nav_home:'الرئيسية', nav_infos:'معلومات', nav_carte:'الخريطة', nav_panier:'السلة', nav_avis:'التقييمات', nav_chat:'الدردشة', nav_contact:'اتصل بنا', nav_profil:'الملف', nav_admin:'الإدارة',
+    retour:'رجوع', fermer:'إغلاق',
+    live:'مباشر', since:'منذ · 2026', petite_serie:'سلسلة محدودة', defiler:'مرر للأسفل', bienvenue:'مرحباً',
+    produit_count:'0 منتج', categories:'الفئات', farms:'المزارع', catalog_soon:'سيتوفر الكتالوج قريباً.',
+    infos_title:'معلومات', livraison:'التوصيل', minimum:'الحد الأدنى', meetup:'لقاء مباشر', disponible:'متاح', horaires_rdv:'مواعيد اللقاء',
+    service_envoi:'خدمة الشحن', paiement_bitcoin:'الدفع بالبيتكوين', paiement:'الدفع', questions_frequentes:'الأسئلة الشائعة',
+    faq_text:'كيف أستلم طلبي؟ أو أرتب لقاءً؟ تظهر الطرق المتاحة وأسعارها عند الطلب.',
+    points_relais:'نقاط الاستلام', adresses:'339 عنوان',
+    panier_title:'السلة', panier_vide:'السلة فارغة', panier_vide_desc:'أضف منتجات من المتجر لتجدها هنا.', parcourir_boutique:'تصفح المتجر',
+    avis_title:'تقييمات العملاء', avis_count:'0 تقييم', aucun_avis:'لا توجد تقييمات بعد', commande_chez_nous:'هل سبق أن طلبت منا؟', laisser_avis:'أضف تقييماً',
+    chat_title:'الدردشة', messages_conserves:'يتم الاحتفاظ بالرسائل.', demarrer_conversation:'ابدأ محادثة', envoyez_message:'أرسل رسالة للحصول على المساعدة', input_placeholder:'اكتب رسالة...',
+    contact_title:'اتصل بنا', choisissez_plateforme:'اختر منصتك', aucun_contact:'لا توجد وسيلة اتصال', aucun_contact_desc:'ستظهر خيارات الاتصال هنا فور إضافتها من قبل المتجر.',
+    mon_profil:'ملفي الشخصي', membre:'عضو', membre_depuis:'عضو منذ', commandes:'الطلبات', langue:'اللغة', mes_commandes:'طلباتي', aucune_commande:'لا توجد طلبات بعد',
+    explorer:'استكشف',
+  },
+};
+function t(key){
+  return (I18N[currentLang] && I18N[currentLang][key]) || I18N.fr[key] || key;
+}
+function setLang(code){
+  currentLang = code;
+  document.documentElement.setAttribute('lang', code);
+  go(currentView);
+}
+
+
+/* ---------------- HOME ---------------- */
+function viewHome(){
+  const heroBlock = SETTINGS.bannerEnabled ? `
+  <div class="hero">
+    <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+    <div class="particle-layer" id="particleLayer"></div>
+    <div class="live-row">
+      <span class="dot">${t('live')}</span>
+      <span>${t('since')}</span>
+    </div>
+    <div class="eyebrow">${t('petite_serie')}</div>
+    <h1>${SHOP.brand}</h1>
+    <div class="sub">${SHOP.slogan.toUpperCase()}</div>
+    <button class="explore-btn" onclick="scrollToCatalog()">${SHOP.cta.toUpperCase()} <span class="arrowcircle">${ic('arrowup')}</span></button>
+    <div class="scroll-cue">${ic('chevdown')} ${t('defiler')}</div>
+  </div>` : `<div class="particle-layer" id="particleLayer" style="position:relative;height:0;"></div>`;
+
+  const marquee = SETTINGS.scrollEnabled && SETTINGS.scrollText ? `
+  <div class="marquee-wrap"><div class="marquee-track">${SETTINGS.scrollText}</div></div>` : '';
+
+  const opts = SETTINGS.homeOptions.filter(o=>o && o.trim());
+  const optsBlock = opts.length ? `<div class="home-opts">${opts.map(o=>`<span class="home-opt-chip">${o}</span>`).join('')}</div>` : '';
+
+  const filteredProducts = PRODUCTS.filter(p =>
+    (!activeCategoryFilter || p.category === activeCategoryFilter) &&
+    (!activeFarmFilter || p.farm === activeFarmFilter)
+  );
+
+  return `
+  <div class="topbar">
+    <button class="btn-pill" onclick="closeApp()">${ic('close')} ${t('fermer')}</button>
+    <div class="right-icons">
+      <div class="icon-btn">${ic('chevdown')}</div>
+      <div class="icon-btn">${ic('more')}</div>
+    </div>
+  </div>
+  ${heroBlock}
+  ${marquee}
+
+  <div class="shop-banner">
+    <div class="row">
+      <div class="avatar">${SHOP.avatar}</div>
+      <div class="meta">
+        <div class="status">${t('bienvenue')}</div>
+        <h2>${SHOP.name}</h2>
+      </div>
+    </div>
+    <span class="count">${filteredProducts.length} produit${filteredProducts.length>1?'s':''}</span>
+  </div>
+  ${optsBlock}
+
+  <div class="filter-row" id="catalogAnchor">
+    <button class="filter-pill ${activeCategoryFilter?'active':''}" onclick="openFilterSheet('category')">${activeCategoryFilter || t('categories')} ${ic('chevdown')}</button>
+    <button class="filter-pill ${activeFarmFilter?'active':''}" onclick="openFilterSheet('farm')">${activeFarmFilter || t('farms')} ${ic('chevdown')}</button>
+  </div>
+
+  ${filteredProducts.length===0 ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('bag')}</div>
+    <p>${PRODUCTS.length===0 ? t('catalog_soon') : 'Aucun produit ne correspond à ce filtre.'}</p>
+  </div>` : `
+  <div class="product-grid">
+    ${filteredProducts.map(p=>{
+      const price=p.prices[0];
+      const thumb=p.media[0];
+      return `
+      <div class="product-card" onclick="go('product_${p.id}')" style="position:relative; cursor:pointer;">
+        ${p.bestSeller?`<span style="position:absolute; top:8px; left:8px; z-index:2; background:#ff6b0022; border:1px solid #ff6b00; color:#ffb066; font-size:10px; font-weight:800; padding:3px 8px; border-radius:10px;">🔥 Top vente</span>`:''}
+        ${p.mostProfitable?`<span style="position:absolute; top:${p.bestSeller?'34px':'8px'}; left:8px; z-index:2; background:rgba(57,255,20,0.15); border:1px solid var(--accent); color:var(--accent); font-size:10px; font-weight:800; padding:3px 8px; border-radius:10px;">💰 Rentable</span>`:''}
+        ${SETTINGS.productLikes ? `<div style="position:absolute; top:8px; right:8px; z-index:2;">${likeButtonHtml(p.id)}</div>` : ''}
+        <div class="product-thumb">
+          ${thumb ? (thumb.type==='video'?`<video src="${thumb.dataUrl}" muted></video>`:`<img src="${thumb.dataUrl}">`) : ic('image')}
+        </div>
+        <div class="product-info">
+          <div class="product-name">${p.name}</div>
+          <div class="product-price">${price&&price.price?price.price+'€':''} ${price&&price.qty?'· '+price.qty:''}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`}
+  ${filterSheetOpen ? renderFilterSheet() : ''}
+  `;
+}
+
+/* ---------- filtres Catégories / Farms (page d'accueil) ---------- */
+let activeCategoryFilter = null;
+let activeFarmFilter = null;
+let filterSheetOpen = null; // 'category' | 'farm' | null
+
+function openFilterSheet(type){
+  filterSheetOpen = type;
+  go('home');
+}
+
+function closeFilterSheet(){
+  filterSheetOpen = null;
+  go('home');
+}
+
+function selectFilter(type, value){
+  if(type==='category') activeCategoryFilter = value || null;
+  else activeFarmFilter = value || null;
+  filterSheetOpen = null;
+  go('home');
+}
+
+function renderFilterSheet(){
+  const isCategory = filterSheetOpen === 'category';
+  // Catégories : on utilise la liste gérée dans le panneau admin (onglet Catégories),
+  // pas seulement celles qui ont déjà un produit — sinon une catégorie fraîchement créée
+  // sans produit n'apparaîtrait jamais dans ce filtre.
+  const values = isCategory
+    ? (SETTINGS.categories || [])
+    : [...new Set(PRODUCTS.map(p => p.farm).filter(Boolean))];
+  const current = isCategory ? activeCategoryFilter : activeFarmFilter;
+  const title = isCategory ? t('categories') : t('farms');
+
+  return `
+  <div class="filter-sheet-overlay" onclick="if(event.target===this) closeFilterSheet()">
+    <div class="filter-sheet">
+      <div class="filter-sheet-handle"></div>
+      <div class="filter-sheet-title">${title}</div>
+      ${values.length===0 ? `
+      <div class="filter-sheet-empty">Aucune ${isCategory?'catégorie':'ferme'} disponible pour le moment.</div>
+      ` : `
+      <div class="filter-sheet-item ${!current?'selected':''}" onclick="selectFilter('${filterSheetOpen}', '')">
+        <span>Tout afficher</span>${!current?ic('check'):''}
+      </div>
+      ${values.map(v => `
+      <div class="filter-sheet-item ${current===v?'selected':''}" onclick="selectFilter('${filterSheetOpen}', '${v.replace(/'/g,"\\'")}')">
+        <span>${v}</span>${current===v?ic('check'):''}
+      </div>`).join('')}
+      `}
+    </div>
+  </div>`;
+}
+
+let particleTimer=null;
+function startParticles(){
+  clearInterval(particleTimer);
+  const layer=document.getElementById('particleLayer');
+  if(!layer) return;
+  layer.innerHTML='';
+  const emojis=[];
+  if(SETTINGS.animLeaves) emojis.push('🍂');
+  if(SETTINGS.animHeli) emojis.push('🚁');
+  if(SETTINGS.animMoney) emojis.push('💵');
+  if(!emojis.length) return;
+  particleTimer=setInterval(()=>{
+    if(!document.getElementById('particleLayer')){ clearInterval(particleTimer); return; }
+    const p=document.createElement('span');
+    p.className='particle';
+    p.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    p.style.left=Math.random()*100+'%';
+    p.style.animationDuration=(4+Math.random()*3)+'s';
+    p.style.fontSize=(14+Math.random()*10)+'px';
+    layer.appendChild(p);
+    setTimeout(()=>p.remove(), 8000);
+  }, 450);
+}
+function scrollToCatalog(){document.getElementById('catalogAnchor').scrollIntoView({behavior:'smooth', block:'center'});}
+function closeApp(){alert('Ferme la mini-app (comportement Telegram simulé).');}
+
+/* ---------------- INFOS ---------------- */
+function viewInfos(){
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+    ${ic('info')}<h1 style="font-size:20px;font-weight:800;">${t('infos_title')}</h1>
+  </div>
+  <div style="padding:16px;">
+    <div class="info-card">
+      <div class="info-row">
+        <div class="info-left">${ic('truck')}<span>${t('livraison')}</span></div>
+        <span class="pill-tag">${t('minimum')} ${SETTINGS.infosLivraisonMin}€</span>
+      </div>
+    </div>
+
+    ${SETTINGS.infosMeetupEnabled ? `
+    <div class="info-card">
+      <div class="info-row" style="border-bottom:1px solid var(--border-soft); padding-bottom:12px; margin-bottom:12px;">
+        <div class="info-left">${ic('users')}<span>${t('meetup')}</span></div>
+      </div>
+      <div class="meetup-item">
+        <div class="info-left">${ic('pin')}<span>${SETTINGS.infosMeetupCity}</span></div>
+        <span class="pill-tag" style="color:#5ce85c;border-color:rgba(92,232,92,.4)">${t('disponible')}</span>
+      </div>
+      <div class="meetup-item">
+        <div class="info-left">${ic('clock')}<span>${t('horaires_rdv')}</span></div>
+      </div>
+      <div class="meetup-item">
+        <span style="color:var(--text-dim); font-size:13px;">${SETTINGS.infosMeetupHours}</span>
+        <span class="pill-tag">${t('minimum')} ${SETTINGS.infosMeetupMin}€</span>
+      </div>
+    </div>` : ''}
+
+    ${SETTINGS.infosEnvoiEnabled ? `
+    <div class="info-card">
+      <div class="info-row">
+        <div class="info-left">${ic('box')}<span>${t('service_envoi')}</span></div>
+      </div>
+      <div class="meetup-item">
+        <div class="info-left">${ic('bitcoin')}<span>${t('paiement_bitcoin')}<br><small style="color:var(--text-faint); font-weight:500;">${t('minimum')} ${SETTINGS.infosBitcoinMin}€</small></span></div>
+        <span class="pill-tag">${t('minimum')} ${SETTINGS.infosBitcoinMin}€</span>
+      </div>
+    </div>` : ''}
+
+    <div class="info-card">
+      <div class="info-row"><div class="info-left">${ic('card')}<span>${t('paiement')}</span></div>${ic('chevright')}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-row"><div class="info-left">${ic('question')}<span>${t('questions_frequentes')}</span></div>${ic('chevright')}</div>
+      <p style="font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5;">${SETTINGS.infosFaqText}</p>
+    </div>
+  </div>
+  `;
+}
+
+/* ---------------- CARTE / POINTS RELAIS ---------------- */
+let activeCarrier='mondial';
+const CARRIERS = {
+  mondial:{label:'Mondial Relay', color:'#ff4d4d', match:['mondial relay','mondialrelay']},
+  inpost:{label:'InPost', color:'#ffb020', match:['inpost']},
+  colissimo:{label:'Colissimo', color:'#ffd600', match:['colissimo','la poste']},
+  chronopost:{label:'Chronopost', color:'#39ff14', match:['chronopost']},
+};
+function setCarrier(c){
+  activeCarrier=c;
+  const row=document.getElementById('carrierRow');
+  if(row) row.innerHTML = carrierChipsHtml();
+  if(leafletMap) fetchLockersInView();
+}
+function carrierChipsHtml(){
+  return Object.entries(CARRIERS).map(([key,c])=>`
+      <span class="carrier-chip" onclick="setCarrier('${key}')" style="cursor:pointer; border-color:${c.color}${activeCarrier===key?'ff':'55'}; color:${activeCarrier===key?'#fff':c.color}; background:${activeCarrier===key?c.color:'transparent'};">● ${c.label}</span>
+  `).join('');
+}
+
+function viewCarte(){
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 16px 12px; display:flex; align-items:center; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="color:var(--accent)">${ic('truck')}</span>
+      <div>
+        <h1 style="font-size:18px;font-weight:800;">${t('points_relais')}</h1>
+        <div style="font-size:11px;color:var(--accent);display:flex;align-items:center;gap:4px;" id="pointsCountLabel"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;"></span>Recherche...</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <div class="icon-btn" onclick="locateMe()">${ic('location')}</div>
+    </div>
+  </div>
+  <div style="display:flex; gap:8px; padding:0 16px 12px; overflow-x:auto;" id="carrierRow">
+    ${carrierChipsHtml()}
+  </div>
+  <div class="map-wrap">
+    <div id="leafletMap" style="position:absolute; inset:0;"></div>
+    <div id="mapLoading" style="position:absolute; top:12px; left:50%; transform:translateX(-50%); background:rgba(10,10,10,0.85); color:var(--accent); font-size:11.5px; font-weight:700; padding:7px 14px; border-radius:20px; display:none; z-index:1000;">Recherche des points dans cette zone...</div>
+  </div>
+  <div id="lockerSheet" style="display:none; position:absolute; left:0; right:0; bottom:0; background:var(--bg-card); border-top:1px solid var(--border-soft); border-radius:20px 20px 0 0; padding:16px 18px 20px; z-index:1500; box-shadow:0 -10px 30px rgba(0,0,0,0.5);"></div>
+  `;
+}
+
+let leafletMap=null, markerCluster=null, overpassAbort=null;
+function initLeafletMap(){
+  const el=document.getElementById('leafletMap');
+  if(!el || typeof L==='undefined') return;
+  if(leafletMap){ leafletMap.remove(); leafletMap=null; }
+  leafletMap = L.map(el, {zoomControl:false, attributionControl:false}).setView([48.8566, 2.3522], 12); // start already zoomed on a real city (Paris) so pins are visible immediately
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains:'abcd', maxZoom:19,
+  }).addTo(leafletMap);
+  L.control.zoom({position:'bottomright'}).addTo(leafletMap);
+  L.control.attribution({position:'bottomleft', prefix:'© OpenStreetMap · CARTO'}).addTo(leafletMap);
+  markerCluster = L.markerClusterGroup({
+    iconCreateFunction: cluster=>{
+      const c=CARRIERS[activeCarrier].color;
+      return L.divIcon({
+        html:`<div style="width:36px;height:36px;border-radius:50%;background:${c}33;border:2px solid ${c};color:${c};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">${cluster.getChildCount()}</div>`,
+        className:'', iconSize:[36,36],
+      });
+    }
+  });
+  leafletMap.addLayer(markerCluster);
+  leafletMap.on('moveend', fetchLockersInView);
+  // if the visitor allows it, recenter on their real position (still a real, zoomed-in city view either way)
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ leafletMap.setView([pos.coords.latitude, pos.coords.longitude], 13); },
+      ()=>{ setTimeout(()=>{ leafletMap.invalidateSize(); fetchLockersInView(); }, 150); },
+      {timeout:2500}
+    );
+  }
+  setTimeout(()=>{ leafletMap.invalidateSize(); fetchLockersInView(); }, 150);
+}
+
+function lockerPopupHtml(tags){
+  const addrParts=[tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
+  const city=[tags['addr:postcode'], tags['addr:city']].filter(Boolean).join(' ');
+  return {addr:addrParts, city, name:tags.name||tags.brand||CARRIERS[activeCarrier].label, hours:tags.opening_hours||''};
+}
+function showLockerSheet(info){
+  const sheet=document.getElementById('lockerSheet');
+  if(!sheet) return;
+  sheet.style.display='block';
+  sheet.innerHTML=`
+    <div style="width:36px;height:4px;background:var(--border-soft);border-radius:3px;margin:0 auto 14px;"></div>
+    <div style="display:flex; gap:12px; align-items:flex-start;">
+      <div style="width:44px;height:44px;border-radius:12px;background:${CARRIERS[activeCarrier].color}22;border:1px solid ${CARRIERS[activeCarrier].color};display:flex;align-items:center;justify-content:center; flex-shrink:0;">${ic('pin')}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:800; font-size:15px;">${info.name}</div>
+        <div style="font-size:13px; color:var(--text-dim); margin-top:3px;">${info.addr||'Adresse non précisée'}</div>
+        <div style="font-size:13px; color:var(--text-dim);">${info.city||''}</div>
+        ${info.hours?`<div style="font-size:12px; color:var(--accent); margin-top:6px;">${ic('clock')} ${info.hours}</div>`:''}
+      </div>
+      <button onclick="document.getElementById('lockerSheet').style.display='none'" class="icon-btn" style="flex-shrink:0;">${ic('close')}</button>
+    </div>
+  `;
+}
+function locateMe(){
+  if(!navigator.geolocation || !leafletMap) return;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    leafletMap.setView([pos.coords.latitude, pos.coords.longitude], 13);
+  }, ()=>toast('Localisation indisponible'));
+}
+
+async function fetchLockersInView(){
+  if(!leafletMap) return;
+  const zoom = leafletMap.getZoom();
+  const loadingEl=document.getElementById('mapLoading');
+  if(zoom < 8){
+    if(loadingEl) loadingEl.style.display='none';
+    markerCluster.clearLayers();
+    const label=document.getElementById('pointsCountLabel');
+    if(label) label.innerHTML='<span style="width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;"></span>Zoomez pour voir les points';
+    return;
+  }
+  const b=leafletMap.getBounds();
+  const bbox=[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()].join(',');
+  if(overpassAbort) overpassAbort.abort();
+  overpassAbort = new AbortController();
+  if(loadingEl) loadingEl.style.display='block';
+  const query = `[out:json][timeout:20];(
+    node["amenity"="parcel_locker"](${bbox});
+    node["shop"="parcel_locker"](${bbox});
+    node["parcel_pickup"="yes"](${bbox});
+    node["vending"="parcel_pickup"](${bbox});
+    node["brand"~"Mondial Relay|InPost|Colissimo|Chronopost|Pickup",i](${bbox});
+    node["operator"~"Mondial Relay|InPost|Colissimo|Chronopost|Pickup",i](${bbox});
+  );out body;`;
+  try{
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method:'POST', body:'data='+encodeURIComponent(query), signal:overpassAbort.signal,
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    });
+    const json = await res.json();
+    const matchWords = CARRIERS[activeCarrier].match;
+    const filtered = (json.elements||[]).filter(el=>{
+      const hay = ((el.tags&&el.tags.brand)||(el.tags&&el.tags.operator)||(el.tags&&el.tags.name)||'').toLowerCase();
+      return matchWords.some(w=>hay.includes(w));
+    });
+    markerCluster.clearLayers();
+    filtered.forEach(el=>{
+      const info = lockerPopupHtml(el.tags||{});
+      const marker = L.marker([el.lat, el.lon], {
+        icon: L.divIcon({
+          html:`<div style="width:26px;height:26px;border-radius:50%;background:${CARRIERS[activeCarrier].color}33;border:2px solid ${CARRIERS[activeCarrier].color};"></div>`,
+          className:'', iconSize:[26,26],
+        })
+      });
+      marker.on('click', ()=>showLockerSheet(info));
+      markerCluster.addLayer(marker);
+    });
+    const label=document.getElementById('pointsCountLabel');
+    if(label){
+      label.innerHTML = filtered.length
+        ? `<span style="width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;"></span>${filtered.length} point${filtered.length>1?'s':''} dans cette zone`
+        : `Aucun point référencé ici pour le moment — déplace la carte ou zoome`;
+    }
+  }catch(e){
+    if(e.name!=='AbortError'){
+      const label=document.getElementById('pointsCountLabel');
+      if(label) label.innerHTML='Recherche indisponible — réessaie en déplaçant la carte';
+    }
+  }finally{
+    if(loadingEl) loadingEl.style.display='none';
+  }
+}
+
+/* ---------------- PRODUCT DETAIL ---------------- */
+let selectedPriceIdx={};
+function viewProductDetail(id){
+  const p = PRODUCTS.find(x=>x.id===id);
+  if(!p) return `<div class="topbar"><button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button></div><div class="empty-state"><p>Produit introuvable</p></div>`;
+  if(selectedPriceIdx[id]===undefined) selectedPriceIdx[id]=0;
+  const sel = p.prices[selectedPriceIdx[id]] || p.prices[0];
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="display:flex; gap:8px; overflow-x:auto; padding:0 16px 14px; -webkit-overflow-scrolling:touch;">
+    ${p.media.length ? p.media.map(m=>`
+      <div style="width:260px; height:260px; flex-shrink:0; border-radius:16px; overflow:hidden; background:#000;">
+        ${m.type==='video'?`<video src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;" controls playsinline></video>`:`<img src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`}
+      </div>`).join('') : `<div style="width:100%; height:220px; border-radius:16px; background:var(--bg-card); display:flex; align-items:center; justify-content:center; color:var(--text-faint);">${ic('image')}</div>`}
+  </div>
+  <div style="padding:0 18px;">
+    <div style="display:flex; gap:6px; margin-bottom:6px;">
+      ${p.bestSeller?`<span style="background:#ff6b0022; border:1px solid #ff6b00; color:#ffb066; font-size:11px; font-weight:800; padding:4px 10px; border-radius:10px;">🔥 Meilleure vente</span>`:''}
+      ${p.mostProfitable?`<span style="background:rgba(57,255,20,0.15); border:1px solid var(--accent); color:var(--accent); font-size:11px; font-weight:800; padding:4px 10px; border-radius:10px;">💰 Plus rentable</span>`:''}
+    </div>
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+      <h1 style="font-size:22px; font-weight:800; margin-bottom:4px;">${p.name}</h1>
+      ${SETTINGS.productLikes ? `<div style="flex-shrink:0; margin-top:2px;">${likeButtonHtml(p.id,'large')}</div>` : ''}
+    </div>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">${p.category||''}${p.farm?' · '+p.farm:''}</div>
+    ${p.description?`<p style="font-size:13.5px; color:#ccc; line-height:1.6; margin-bottom:18px;">${p.description}</p>`:''}
+
+    <div class="section-label" style="padding-left:0;">CHOISIR UN FORMAT</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;">
+      ${p.prices.map((pr,i)=>`
+        <button onclick="selectedPriceIdx['${p.id}']=${i}; go('product_${p.id}')" style="padding:10px 16px; border-radius:12px; border:1px solid ${selectedPriceIdx[id]===i?'var(--accent)':'var(--border-soft)'}; background:${selectedPriceIdx[id]===i?'rgba(57,255,20,0.08)':'var(--bg-card)'}; color:${selectedPriceIdx[id]===i?'var(--accent)':'#fff'}; font-weight:700; font-size:13px;">
+          ${pr.qty||'Prix de base'} ${pr.price?'· '+pr.price+'€':''}
+        </button>`).join('')}
+    </div>
+  </div>
+  <div style="padding:0 18px 20px;">
+    <button class="btn-primary" onclick="addToCart('${p.id}', ${selectedPriceIdx[id]})">${ic('cart')} Ajouter au panier — ${sel.price?sel.price+'€':'—'}</button>
+  </div>
+  `;
+}
+
+/* ---------------- PANIER ---------------- */
+let CART=[];
+function loadCart(){ try{ const raw=localStorage.getItem('soucoupe62_cart'); CART = raw?JSON.parse(raw):[]; }catch(e){ CART=[]; } }
+function persistCart(){ try{ localStorage.setItem('soucoupe62_cart', JSON.stringify(CART)); }catch(e){} }
+function cartCount(){ return CART.reduce((s,i)=>s+i.qty,0); }
+function cartTotal(){
+  return CART.reduce((sum,item)=>{
+    const p=PRODUCTS.find(x=>x.id===item.productId);
+    const pr=p && p.prices[item.priceIdx];
+    return sum + (pr && pr.price ? parseFloat(pr.price)*item.qty : 0);
+  },0);
+}
+function addToCart(productId, priceIdx){
+  const existing = CART.find(i=>i.productId===productId && i.priceIdx===priceIdx);
+  if(existing) existing.qty++;
+  else CART.push({productId, priceIdx, qty:1});
+  persistCart();
+  toast('Ajouté au panier');
+  renderNav();
+}
+function changeCartQty(idx, delta){
+  CART[idx].qty += delta;
+  if(CART[idx].qty<=0) CART.splice(idx,1);
+  persistCart();
+  go('panier');
+}
+function viewPanier(){
+  if(CART.length===0){
+    return `
+    <div class="topbar">
+      <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+      <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+    </div>
+    <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+      ${ic('cart')}<h1 style="font-size:20px;font-weight:800;">${t('panier_title')}</h1>
+    </div>
+    <div class="empty-state">
+      <div class="icon-circle">${ic('bag')}</div>
+      <p class="title">${t('panier_vide')}</p>
+      <p>${t('panier_vide_desc')}</p>
+      <button class="btn-primary" style="margin-top:6px;" onclick="go('home')">${t('parcourir_boutique')}</button>
+    </div>`;
+  }
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+    ${ic('cart')}<h1 style="font-size:20px;font-weight:800;">${t('panier_title')}</h1>
+  </div>
+  <div style="padding:8px 16px;">
+    ${CART.map((item,idx)=>{
+      const p=PRODUCTS.find(x=>x.id===item.productId);
+      if(!p) return '';
+      const pr=p.prices[item.priceIdx]||{};
+      const thumb=p.media[0];
+      return `
+      <div style="display:flex; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin-bottom:10px; padding:12px; align-items:center;">
+        <div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#000;display:flex;align-items:center;justify-content:center;">
+          ${thumb?(thumb.type==='video'?`<video src="${thumb.dataUrl}" muted style="width:100%;height:100%;object-fit:cover;"></video>`:`<img src="${thumb.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`):ic('image')}
+        </div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13.5px; font-weight:700;">${p.name}</div>
+          <div style="font-size:11.5px; color:var(--text-dim);">${pr.qty||''} · ${pr.price||0}€</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="icon-btn" style="width:28px;height:28px;" onclick="changeCartQty(${idx},-1)">−</button>
+          <span style="font-weight:700; min-width:14px; text-align:center;">${item.qty}</span>
+          <button class="icon-btn" style="width:28px;height:28px;" onclick="changeCartQty(${idx},1)">+</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+  <div style="padding:8px 18px 4px; display:flex; justify-content:space-between; align-items:center;">
+    <span style="font-size:14px; color:var(--text-dim); font-weight:700;">TOTAL</span>
+    <span style="font-size:22px; font-weight:800;">${cartTotal().toFixed(2)}€</span>
+  </div>
+  <div style="padding:14px 18px 6px;">
+    <button class="btn-primary" onclick="openCheckoutSheet()">${ic('send')} Passer commande sur Snapchat</button>
+  </div>
+  <p style="margin:0 18px 20px; font-size:11px; color:var(--text-faint); text-align:center; line-height:1.5;">Ton récapitulatif de commande sera copié automatiquement — il ne restera qu'à le coller dans Snapchat et l'envoyer.</p>
+  `;
+}
+
+function renderCheckoutSheetOverlay(){
+  let el=document.getElementById('checkoutSheet');
+  if(!checkoutStep){ if(el) el.remove(); return; }
+  if(!el){
+    el=document.createElement('div');
+    el.id='checkoutSheet';
+    el.style.cssText='position:absolute; inset:0; z-index:7000; background:rgba(0,0,0,0.55); display:flex; align-items:flex-end;';
+    el.onclick=(e)=>{ if(e.target===el) closeCheckoutSheet(); };
+    document.getElementById('app').appendChild(el);
+  }
+  if(checkoutStep==='choose'){
+    el.innerHTML = `
+    <div style="width:100%; background:var(--bg-card); border-top:1px solid var(--border-soft); border-radius:20px 20px 0 0; padding:18px; padding-bottom:calc(18px + env(safe-area-inset-bottom,0px)); box-shadow:0 -10px 30px rgba(0,0,0,0.5);">
+      <div style="width:36px;height:4px;background:var(--border-soft);border-radius:3px;margin:0 auto 16px;"></div>
+      <div style="font-weight:800; font-size:15px; margin-bottom:14px; text-align:center;">Comment veux-tu récupérer ta commande ?</div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button class="btn-outline" onclick="chooseSurPlace()">🛍️ Sur place</button>
+        <button class="btn-primary" onclick="chooseLivraison()">🚚 Livraison</button>
+      </div>
+      <button onclick="closeCheckoutSheet()" style="width:100%; background:none; border:none; color:var(--text-faint); font-size:12px; margin-top:14px; padding:6px;">Annuler</button>
+    </div>`;
+  } else if(checkoutStep==='address'){
+    el.innerHTML = `
+    <div style="width:100%; background:var(--bg-card); border-top:1px solid var(--border-soft); border-radius:20px 20px 0 0; padding:18px; padding-bottom:calc(18px + env(safe-area-inset-bottom,0px)); box-shadow:0 -10px 30px rgba(0,0,0,0.5);">
+      <div style="width:36px;height:4px;background:var(--border-soft);border-radius:3px;margin:0 auto 16px;"></div>
+      <div style="font-weight:800; font-size:15px; margin-bottom:10px;">Ton adresse de livraison</div>
+      <textarea id="inpAddress" rows="3" placeholder="Adresse complète (rue, ville, code postal...)" style="width:100%; background:var(--bg); border:1px solid var(--border-soft); border-radius:12px; padding:12px; color:#fff; font-size:16px; font-family:inherit;"></textarea>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn-outline" onclick="checkoutStep='choose'; renderCheckoutSheetOverlay();">Retour</button>
+        <button class="btn-primary" onclick="confirmLivraison()">Valider et envoyer</button>
+      </div>
+    </div>`;
+    setTimeout(()=>{ const inp=document.getElementById('inpAddress'); if(inp) inp.focus(); }, 100);
+  }
+}
+
+let checkoutStep = null; // null | 'choose' | 'address'
+function openCheckoutSheet(){
+  if(CART.length===0){ toast('Ton panier est vide'); return; }
+  checkoutStep='choose';
+  renderCheckoutSheetOverlay();
+}
+function closeCheckoutSheet(){ checkoutStep=null; renderCheckoutSheetOverlay(); }
+function chooseSurPlace(){
+  finalizeOrder('Surplace :');
+}
+function chooseLivraison(){
+  checkoutStep='address';
+  renderCheckoutSheetOverlay();
+}
+function confirmLivraison(){
+  const addr = document.getElementById('inpAddress').value.trim();
+  if(!addr){ toast('Indique ton adresse'); return; }
+  finalizeOrder('Livraison : '+addr);
+}
+
+function buildOrderSummaryText(deliveryLine){
+  const lines = CART.map(item=>{
+    const p=PRODUCTS.find(x=>x.id===item.productId);
+    if(!p) return null;
+    const pr=p.prices[item.priceIdx]||{};
+    const lineTotal = pr.price ? (parseFloat(pr.price)*item.qty).toFixed(2) : '0.00';
+    return `• ${p.name} x${item.qty} — ${lineTotal}€`;
+  }).filter(Boolean);
+  return [
+    `🛍️ Nouvelle commande — `,
+    ...lines,
+    ``,
+    `Total: ${cartTotal().toFixed(2)}€`,
+    deliveryLine,
+    `Client: ${VISITOR_NAME}`,
+  ].join('\n');
+}
+
+async function finalizeOrder(deliveryLine){
+  const summary = buildOrderSummaryText(deliveryLine);
+  try{
+    await navigator.clipboard.writeText(summary);
+    toast('Commande copiée — colle-la dans Snapchat !');
+  }catch(e){
+    toast('Ouverture de Snapchat — copie le récap manuellement si besoin');
+  }
+  checkoutStep=null;
+  renderCheckoutSheetOverlay();
+  const username = SETTINGS.snapchatUsername || 'soucoupe62';
+  window.open(`https://www.snapchat.com/add/${username}`, '_blank');
+}
+
+/* ---------------- PRODUCT LIKES ---------------- */
+let LIKE_COUNTS = {}; // productId -> count
+let MY_LIKES = new Set(); // productIds this visitor liked
+async function loadLikes(){
+  try{
+    const {data, error} = await sb.from('miniapp_product_likes').select('product_id, visitor_id');
+    if(error) throw error;
+    LIKE_COUNTS = {};
+    MY_LIKES = new Set();
+    (data||[]).forEach(row=>{
+      LIKE_COUNTS[row.product_id] = (LIKE_COUNTS[row.product_id]||0)+1;
+      if(row.visitor_id===VISITOR_ID) MY_LIKES.add(row.product_id);
+    });
+  }catch(e){ logSbError('loadLikes', e); }
+}
+async function toggleLike(productId){
+  const wasLiked = MY_LIKES.has(productId);
+  // optimistic update so the tap feels instant
+  if(wasLiked){ MY_LIKES.delete(productId); LIKE_COUNTS[productId]=Math.max(0,(LIKE_COUNTS[productId]||1)-1); }
+  else{ MY_LIKES.add(productId); LIKE_COUNTS[productId]=(LIKE_COUNTS[productId]||0)+1; }
+  go(currentView);
+  try{
+    if(wasLiked){
+      const {error} = await sb.from('miniapp_product_likes').delete().eq('product_id', productId).eq('visitor_id', VISITOR_ID);
+      if(error) throw error;
+    }else{
+      const {error} = await sb.from('miniapp_product_likes').insert({product_id: productId, visitor_id: VISITOR_ID});
+      if(error) throw error;
+    }
+  }catch(e){
+    // roll back on failure
+    if(wasLiked){ MY_LIKES.add(productId); LIKE_COUNTS[productId]=(LIKE_COUNTS[productId]||0)+1; }
+    else{ MY_LIKES.delete(productId); LIKE_COUNTS[productId]=Math.max(0,(LIKE_COUNTS[productId]||1)-1); }
+    go(currentView);
+    toast('Échec — réessaie');
+  }
+}
+function likeButtonHtml(productId, size){
+  size = size||'small';
+  const liked = MY_LIKES.has(productId);
+  const count = LIKE_COUNTS[productId]||0;
+  const fontSize = size==='large'?'14px':'11px';
+  const iconSize = size==='large'?'18px':'14px';
+  return `<button onclick="event.stopPropagation(); toggleLike('${productId}')" style="display:flex; align-items:center; gap:5px; background:${liked?'rgba(255,45,85,0.15)':'rgba(255,255,255,0.06)'}; border:1px solid ${liked?'#ff2d55':'var(--border-soft)'}; color:${liked?'#ff2d55':'#fff'}; padding:5px 10px; border-radius:20px; font-size:${fontSize}; font-weight:700;">
+    <span style="font-size:${iconSize};">${liked?'❤️':'🤍'}</span>${count}
+  </button>`;
+}
+
+/* ---------------- AVIS ---------------- */
+let REVIEWS = [];
+async function loadReviews(){
+  try{
+    const {data, error} = await sb.from('miniapp_reviews').select('*').eq('approved', true).order('created_at', {ascending:false});
+    if(error) throw error;
+    REVIEWS = data||[];
+  }catch(e){ console.error('loadReviews failed', e); REVIEWS=[]; }
+}
+function reviewStats(){
+  const total = REVIEWS.length;
+  const counts = {5:0,4:0,3:0,2:0,1:0};
+  let sum=0;
+  REVIEWS.forEach(r=>{ counts[r.rating]=(counts[r.rating]||0)+1; sum+=r.rating; });
+  const avg = total ? (sum/total) : 0;
+  return {total, counts, avg};
+}
+let reviewFormOpen=false;
+let reviewDraftRating=5;
+function openReviewForm(){ reviewFormOpen=true; go('avis'); }
+function closeReviewForm(){ reviewFormOpen=false; go('avis'); }
+function setReviewDraftRating(n){ reviewDraftRating=n; go('avis'); }
+function anonymousLabel(visitorId){
+  // FNV-1a hash: solid avalanche behavior, avoids the collisions a naive multiplicative hash gets on similar-looking ids
+  let hash = 0x811c9dc5;
+  for(let i=0;i<visitorId.length;i++){
+    hash ^= visitorId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const code = (hash>>>0).toString(16).toUpperCase().padStart(8,'0').slice(0,5);
+  return 'Client #'+code;
+}
+async function submitReview(){
+  const comment = document.getElementById('reviewComment').value.trim();
+  const btn = document.getElementById('reviewSubmitBtn');
+  if(btn) btn.textContent='Envoi...';
+  try{
+    const {error} = await sb.from('miniapp_reviews').insert({
+      visitor_id: VISITOR_ID, author_name: anonymousLabel(VISITOR_ID), rating: reviewDraftRating, comment,
+    });
+    if(error) throw error;
+    await loadReviews();
+    reviewFormOpen=false;
+    toast('Avis publié — merci !');
+    go('avis');
+  }catch(e){
+    toast('Échec de l\u2019envoi — réessaie');
+    if(btn) btn.textContent='Publier mon avis';
+  }
+}
+function timeAgo(dateStr){
+  const d=new Date(dateStr), diff=(Date.now()-d.getTime())/1000;
+  if(diff<60) return 'à l\u2019instant';
+  if(diff<3600) return Math.floor(diff/60)+' min';
+  if(diff<86400) return Math.floor(diff/3600)+' h';
+  if(diff<2592000) return Math.floor(diff/86400)+' j';
+  return d.toLocaleDateString('fr-FR');
+}
+
+let avisPollTimer=null;
+function stopAvisPolling(){ if(avisPollTimer){ clearInterval(avisPollTimer); avisPollTimer=null; } }
+function startAvisPolling(){
+  clearInterval(avisPollTimer);
+  avisPollTimer=setInterval(async ()=>{
+    if(currentView!=='avis' || reviewFormOpen){ clearInterval(avisPollTimer); return; }
+    const before = REVIEWS.length;
+    await loadReviews();
+    if(REVIEWS.length!==before) go('avis');
+  }, 5000);
+}
+function viewAvis(){
+  startAvisPolling();
+  const {total, counts, avg} = reviewStats();
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="stopAvisPolling(); go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+    ${ic('star')}
+    <div><h1 style="font-size:20px;font-weight:800;">${t('avis_title')}</h1><div style="font-size:11px;color:var(--text-dim);">${total} avis</div></div>
+  </div>
+  <div class="rating-card">
+    <div class="rating-big">
+      <div class="score">${avg.toFixed(1)}</div>
+      <div class="stars">${[1,2,3,4,5].map(i=>ic(i<=Math.round(avg)?'starfull':'star')).join('')}</div>
+      <div style="font-size:10px;color:var(--text-faint); font-weight:700; letter-spacing:1px;">${total} AVIS</div>
+    </div>
+    <div class="rating-bars">
+      ${[5,4,3,2,1].map(n=>`<div class="rbar-row"><span>${n} ${ic('starfull')}</span><div class="rbar"><div class="rbar-fill" style="width:${total?Math.round(counts[n]/total*100):0}%"></div></div><span class="rbar-n">${counts[n]}</span></div>`).join('')}
+    </div>
+  </div>
+
+  ${reviewFormOpen ? `
+  <div style="margin:14px 16px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:16px; padding:16px;">
+    <div style="font-weight:700; margin-bottom:10px;">Ta note</div>
+    <div style="display:flex; gap:6px; margin-bottom:14px;">
+      ${[1,2,3,4,5].map(n=>`<button onclick="setReviewDraftRating(${n})" style="background:none;border:none;color:${n<=reviewDraftRating?'var(--accent)':'var(--text-faint)'};">${ic(n<=reviewDraftRating?'starfull':'star')}</button>`).join('')}
+    </div>
+    <textarea id="reviewComment" rows="3" placeholder="Ton expérience avec la boutique..." style="width:100%; background:var(--bg); border:1px solid var(--border-soft); border-radius:12px; padding:12px; color:#fff; font-size:14px; font-family:inherit;"></textarea>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button class="btn-outline" onclick="closeReviewForm()">Annuler</button>
+      <button class="btn-primary" id="reviewSubmitBtn" onclick="submitReview()">Publier mon avis</button>
+    </div>
+  </div>` : `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('starfull')}</div>
+    <p class="title">${t('commande_chez_nous')}</p>
+    <button class="btn-primary" onclick="openReviewForm()">${ic('starfull')} ${t('laisser_avis')}</button>
+  </div>`}
+
+  ${total===0 ? `
+  <div class="empty-state" style="margin-top:0;">
+    <div class="icon-circle">${ic('chatround')}</div>
+    <p>${t('aucun_avis')}</p>
+  </div>` : `
+  <div style="padding:4px 16px 20px;">
+    ${REVIEWS.map(r=>`
+      <div style="background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; padding:14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-weight:700; font-size:13px;">${r.author_name}</span>
+          <span style="font-size:11px; color:var(--text-faint);">${timeAgo(r.created_at)}</span>
+        </div>
+        <div style="display:flex; gap:2px; margin-bottom:8px; color:var(--accent);">${[1,2,3,4,5].map(i=>ic(i<=r.rating?'starfull':'star')).join('')}</div>
+        ${r.comment?`<p style="font-size:13px; color:#ddd; line-height:1.5;">${r.comment}</p>`:''}
+      </div>`).join('')}
+  </div>`}
+  `;
+}
+
+/* ---------------- CHAT ---------------- */
+let CHAT_MESSAGES = [];
+let chatPollTimer = null;
+async function loadMyChat(){
+  try{
+    const {data, error} = await sb.from('miniapp_chat_messages').select('*').eq('visitor_id', VISITOR_ID).order('created_at', {ascending:true});
+    if(error) throw error;
+    CHAT_MESSAGES = data||[];
+  }catch(e){ console.error('loadMyChat failed', e); }
+}
+function startChatPolling(){
+  stopChatPolling();
+  chatPollTimer = setInterval(async ()=>{
+    if(currentView!=='chat') { stopChatPolling(); return; }
+    const before = CHAT_MESSAGES.length;
+    await loadMyChat();
+    if(CHAT_MESSAGES.length!==before) go('chat');
+  }, 3500);
+}
+function stopChatPolling(){ if(chatPollTimer){ clearInterval(chatPollTimer); chatPollTimer=null; } }
+async function sendChatMessage(){
+  const input=document.getElementById('chatInput');
+  const text=input.value.trim();
+  if(!text) return;
+  input.value='';
+  input.disabled=true;
+  try{
+    const {error} = await sb.from('miniapp_chat_messages').insert({visitor_id:VISITOR_ID, visitor_name:VISITOR_NAME, sender:'user', message:text});
+    if(error) throw error;
+    await loadMyChat();
+    go('chat');
+  }catch(e){ toast('Message non envoyé — réessaie'); input.value=text; }
+  input.disabled=false;
+}
+
+function viewChat(){
+  startChatPolling();
+  const hasMessages = CHAT_MESSAGES.length>0;
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="stopChatPolling(); go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+    ${ic('chatround')}<h1 style="font-size:20px;font-weight:800;">${t('chat_title')}</h1>
+  </div>
+  <div style="margin:10px 16px; text-align:center; background:rgba(57,255,20,0.06); border:1px solid rgba(57,255,20,0.2); color:var(--accent); font-size:11.5px; font-weight:600; padding:8px; border-radius:10px;">
+    ${ic('clock')} ${t('messages_conserves')}
+  </div>
+  ${hasMessages ? `
+  <div id="chatThread" style="padding:4px 16px 90px; display:flex; flex-direction:column; gap:10px;">
+    ${CHAT_MESSAGES.map(m=>`
+      <div style="display:flex; ${m.sender==='user'?'justify-content:flex-end':'justify-content:flex-start'};">
+        <div style="max-width:75%; padding:10px 14px; border-radius:16px; font-size:13.5px; line-height:1.4;
+          ${m.sender==='user' ? 'background:var(--accent); color:#04240a; border-bottom-right-radius:4px;' : 'background:var(--bg-card); color:#fff; border:1px solid var(--border-soft); border-bottom-left-radius:4px;'}">
+          ${m.message}
+        </div>
+      </div>`).join('')}
+  </div>
+  ` : `
+  <div class="empty-state" style="min-height:280px; justify-content:center;">
+    <div class="icon-circle" style="width:64px;height:64px;">${ic('chatround')}</div>
+    <p class="title">${t('demarrer_conversation')}</p>
+    <p>${t('envoyez_message')}</p>
+  </div>`}
+  <div class="chat-input-bar">
+    <input type="text" id="chatInput" placeholder="${t('input_placeholder')}" onkeydown="if(event.key==='Enter') sendChatMessage()">
+    <button class="send-btn" onclick="sendChatMessage()">${ic('send')}</button>
+  </div>
+  `;
+}
+
+/* ---------------- CONTACT ---------------- */
+function viewContact(){
+  const hasSnap = SETTINGS.snapchatUsername && SETTINGS.snapchatUsername.trim();
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+    ${ic('mail')}
+    <div><h1 style="font-size:20px;font-weight:800;">${t('contact_title')}</h1><div style="font-size:11px;color:var(--text-dim);">${t('choisissez_plateforme')}</div></div>
+  </div>
+  ${hasSnap ? `
+  <div style="margin:16px;">
+    <button onclick="window.open('https://www.snapchat.com/add/${SETTINGS.snapchatUsername}','_blank')" style="width:100%; display:flex; align-items:center; gap:14px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:16px; padding:16px;">
+      <div style="width:44px;height:44px;border-radius:12px;background:#FFFC0022;border:1px solid #FFFC00;display:flex;align-items:center;justify-content:center; font-size:20px;">👻</div>
+      <div style="flex:1; text-align:left;">
+        <div style="font-weight:700; font-size:14px;">Snapchat</div>
+        <div style="font-size:12px; color:var(--text-dim);">@${SETTINGS.snapchatUsername}</div>
+      </div>
+      ${ic('chevright')}
+    </button>
+  </div>
+  ` : `
+  <div class="empty-state" style="min-height:280px; justify-content:center;">
+    <div class="icon-circle" style="width:64px;height:64px;">${ic('mail')}</div>
+    <p class="title">${t('aucun_contact')}</p>
+    <p>${t('aucun_contact_desc')}</p>
+  </div>
+  `}
+  `;
+}
+
+/* ---------------- PROFIL ---------------- */
+const LANGS=[
+  {code:'fr', c:'🇫🇷', n:'Français'},
+  {code:'en', c:'🇬🇧', n:'English'},
+  {code:'it', c:'🇮🇹', n:'Italiano'},
+  {code:'es', c:'🇪🇸', n:'Español'},
+  {code:'de', c:'🇩🇪', n:'Deutsch'},
+  {code:'ar', c:'🇸🇦', n:'العربية'},
+  {code:'ar', c:'🇩🇿', n:'الجزائر'},
+  {code:'ar', c:'🇲🇦', n:'المغرب'},
+  {code:'ar', c:'🇹🇳', n:'تونس'},
+];
+function viewProfil(){
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="go('home')">${ic('chevright',"rot180")} ${t('retour')}</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div style="padding:6px 18px 4px; display:flex; align-items:center; gap:10px;">
+    ${ic('starfull')}<h1 style="font-size:20px;font-weight:800;">${t('mon_profil')}</h1>
+  </div>
+  <div style="display:flex; flex-direction:column; align-items:center; padding:18px 0 10px;">
+    <div class="profile-avatar">${SHOP.avatar}</div>
+    <div style="font-size:10px; letter-spacing:2px; color:var(--accent); font-weight:700; margin-top:10px;">${t('membre')}</div>
+    <div style="font-size:19px; font-weight:800; margin-top:2px;">LAPERLE DUNORD</div>
+    <div style="font-size:12.5px; color:var(--text-dim); margin-top:2px;">@laperledunord</div>
+  </div>
+  <div style="display:flex; gap:10px; padding:6px 16px 4px;">
+    <div class="stat-box"><div class="v">0</div><div class="l">${t('commandes')}</div></div>
+    <div class="stat-box"><div class="v">juil. 26</div><div class="l">${t('membre_depuis')}</div></div>
+  </div>
+
+  <div class="section-label" style="display:flex;align-items:center;gap:6px;">${ic('globe')} ${t('langue')}</div>
+  <div class="lang-grid">
+    ${LANGS.map(l=>`<button class="lang-pill ${l.code===currentLang?'on':''}" onclick="setLang('${l.code}')">${l.c} ${l.n}</button>`).join('')}
+  </div>
+
+  <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;">
+    <span style="display:flex;align-items:center;gap:6px;">${ic('box')} ${t('mes_commandes')}</span>
+    <span style="color:var(--accent)">${ic('refresh')}</span>
+  </div>
+  <div class="empty-state">
+    <div class="icon-circle">${ic('box')}</div>
+    <p>${t('aucune_commande')}</p>
+    <button class="btn-primary" onclick="go('home')">${t('parcourir_boutique')}</button>
+  </div>
+  `;
+}
+
+/* ================= ADMIN ================= */
+let adminSub='hub';
+function adminHeader(title, showTabs){
+  return `
+  <div class="topbar">
+    <button class="back-btn" onclick="${adminSub==='hub'?"go('home')":"setAdminSub('hub')"}">${ic('chevright',"rot180")} Retour</button>
+    <div class="right-icons"><div class="icon-btn">${ic('chevdown')}</div><div class="icon-btn">${ic('more')}</div></div>
+  </div>
+  <div class="admin-head">
+    <div class="l">${ic('crown')}<div><h1>${title}</h1><div class="sub">${SHOP.name}</div></div></div>
+    <span class="pill-tag">V3</span>
+  </div>
+  ${showTabs!==false?`<div class="admin-tabs">
+    <button class="admin-tab ${adminSub==='hub'?'on':''}" onclick="setAdminSub('hub')">${ic('layers')} Créer</button>
+    <button class="admin-tab ${adminSub==='produits'?'on':''}" onclick="setAdminSub('produits')">${ic('bag')} Produits</button>
+    <button class="admin-tab ${adminSub==='commandes'?'on':''}" onclick="setAdminSub('commandes')">${ic('box')} Commandes</button>
+  </div>`:''}
+  `;
+}
+function setAdminSub(id){
+  adminSub=id; go('admin');
+  if(id==='support'){ loadAllChat().then(()=>{ if(adminSub==='support') go('admin'); }); }
+  if(id==='verifications'){ loadVisitors().then(()=>{ if(adminSub==='verifications') go('admin'); }); }
+}
+
+function viewAdmin(){
+  if(adminSub==='hub') return adminHub();
+  if(adminSub==='creer') return adminCreer();
+  if(adminSub==='produits') return adminProduits();
+  if(adminSub==='commandes') return adminCommandes();
+  if(adminSub==='categories') return adminCategories();
+  if(adminSub==='avis') return adminAvis();
+  if(adminSub==='support') return adminSupport();
+  if(adminSub==='promos') return adminPromos();
+  if(adminSub==='bonus') return adminBonus();
+  if(adminSub==='parrainages') return adminParrainages();
+  if(adminSub==='jeux') return adminJeux();
+  if(adminSub==='economie') return adminEconomie();
+  if(adminSub==='liens') return adminLiens();
+  if(adminSub==='infosedit') return adminInfosEdit();
+  if(adminSub==='apparence') return adminApparence();
+  if(adminSub==='securite') return adminSecurite();
+  if(adminSub==='verifications') return adminVerifications();
+  return adminHub();
+}
+
+function adminHub(){
+  return `
+  ${adminHeader('Fonctionnalités', true)}
+  <div class="offer-banner">
+    <div class="t">Votre offre : V3</div>
+    <div class="d">Les fonctionnalités se débloquent selon votre offre.</div>
+    <div class="tiers">
+      <span class="tier on">● V1</span><span class="tier on">● V2</span><span class="tier on">● V3</span>
+    </div>
+    <div class="prog-label"><span>0/4 complété</span><span>Remplissez les champs requis</span></div>
+    <div class="prog"><div class="prog-fill"></div></div>
+  </div>
+
+  <div class="grp-label">BOUTIQUE</div>
+  <div class="grid3">
+    <button class="admin-card" onclick="productDraft=null; setAdminSub('creer')"><span class="vtag">V1</span>${ic('plus')}<span>Créer</span></button>
+    <button class="admin-card" onclick="setAdminSub('produits')"><span class="vtag">V1</span>${ic('bag')}<span>Produits</span></button>
+    <button class="admin-card" onclick="setAdminSub('commandes')"><span class="vtag">V1</span>${ic('box')}<span>Commandes</span></button>
+    <button class="admin-card" onclick="setAdminSub('categories')"><span class="vtag">V1</span>${ic('folder')}<span>Catégories</span></button>
+  </div>
+
+  <div class="grp-label">CLIENTS</div>
+  <div class="grid3">
+    <button class="admin-card" onclick="setAdminSub('verifications')" style="position:relative;"><span class="vtag">V1</span>${ic('shield')}<span>Vérifications</span>${PENDING_VISITORS_COUNT>0?`<span style="position:absolute; top:-6px; right:-6px; background:#ff9500; color:#000; font-size:10px; font-weight:800; width:18px;height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center;">${PENDING_VISITORS_COUNT}</span>`:''}</button>
+    <button class="admin-card" onclick="setAdminSub('avis')"><span class="vtag">V1</span>${ic('star')}<span>Avis</span></button>
+    <button class="admin-card" onclick="setAdminSub('support')"><span class="vtag">V3</span>${ic('chat')}<span>Support</span></button>
+    <button class="admin-card" onclick="setAdminSub('promos')"><span class="vtag">V2</span>${ic('tag')}<span>Promos</span></button>
+    <button class="admin-card" onclick="setAdminSub('bonus')"><span class="vtag">V2</span>${ic('coin')}<span>Bonus</span></button>
+    <button class="admin-card" onclick="setAdminSub('parrainages')"><span class="vtag">V2</span>${ic('gift')}<span>Parrainages</span></button>
+    <button class="admin-card" onclick="setAdminSub('jeux')"><span class="vtag">V2</span>${ic('dice')}<span>Jeux</span></button>
+  </div>
+  <div class="grid3" style="margin-top:10px;">
+    <button class="admin-card" onclick="setAdminSub('economie')"><span class="vtag">V2</span>${ic('chart')}<span>Economie</span></button>
+  </div>
+
+  <div class="grp-label">CONFIG</div>
+  <div class="grid3">
+    <button class="admin-card" onclick="setAdminSub('infosedit')"><span class="vtag">V1</span>${ic('info')}<span>Infos</span></button>
+    <button class="admin-card" onclick="setAdminSub('liens')"><span class="vtag">V1</span>${ic('link')}<span>Liens</span></button>
+    <button class="admin-card" onclick="setAdminSub('apparence')"><span class="vtag">V1</span>${ic('palette')}<span>Apparence</span></button>
+    <button class="admin-card" onclick="setAdminSub('securite')"><span class="vtag">V1</span>${ic('shield')}<span>Sécurité</span></button>
+  </div>
+  `;
+}
+
+let productDraft = null;
+function newProductDraft(){
+  return {id:null, name:'', description:'', category:'', farm:'', promoEnabled:false, bestSeller:false, mostProfitable:false,
+    prices:[{qty:'',price:'',priceRdv:'',priceLivraison:''}], media:[]};
+}
+function ensureDraft(){ if(!productDraft) productDraft = newProductDraft(); }
+
+function draftField(field, value){
+  ensureDraft();
+  productDraft[field]=value;
+}
+function draftPriceField(idx, field, value){
+  ensureDraft();
+  productDraft.prices[idx][field]=value;
+}
+function addPriceTier(){
+  ensureDraft();
+  productDraft.prices.push({qty:'',price:'',priceRdv:'',priceLivraison:''});
+  go('admin');
+}
+function removePriceTier(idx){
+  ensureDraft();
+  if(productDraft.prices.length<=1){ toast('Il faut au moins un palier de prix'); return; }
+  productDraft.prices.splice(idx,1);
+  go('admin');
+}
+function compressImage(dataUrl, maxDim, quality){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+      else if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+function handleProductMedia(input){
+  ensureDraft();
+  const files=Array.from(input.files||[]);
+  let remaining=files.length;
+  if(!remaining) return;
+  files.forEach(file=>{
+    const isVideo = file.type.startsWith('video/');
+    if(isVideo && file.size > 3*1024*1024){
+      toast('Vidéo trop lourde (>3 Mo) — risque de faire échouer l\u2019enregistrement');
+    }
+    const reader=new FileReader();
+    reader.onload=async ()=>{
+      let dataUrl=reader.result;
+      if(!isVideo){ dataUrl = await compressImage(dataUrl, 1000, 0.72); }
+      productDraft.media.push({type:isVideo?'video':'image', dataUrl, name:file.name});
+      remaining--;
+      if(remaining===0) go('admin');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function removeDraftMedia(idx){
+  ensureDraft();
+  productDraft.media.splice(idx,1);
+  go('admin');
+}
+async function saveProduct(){
+  ensureDraft();
+  if(!productDraft.name || !productDraft.name.trim()){ toast('Le nom du produit est requis'); return; }
+  const validPrices = productDraft.prices.filter(p=>p.qty || p.price);
+  if(!validPrices.length){ toast('Ajoutez au moins un prix'); return; }
+  const product = Object.assign({}, productDraft, {
+    id: productDraft.id || ('p'+Date.now()),
+    prices: validPrices,
+  });
+  toast('Enregistrement...');
+  const ok = await upsertProductRemote(product);
+  if(!ok){ showStorageFullError(); return; }
+  const existingIdx = PRODUCTS.findIndex(p=>p.id===product.id);
+  if(existingIdx>-1) PRODUCTS[existingIdx]=product; else PRODUCTS.push(product);
+  toast(existingIdx>-1 ? 'Produit mis à jour' : 'Produit créé — visible par tous');
+  productDraft = null;
+  adminSub='produits';
+  go('admin');
+}
+function showStorageFullError(){
+  let el=document.getElementById('storageErr');
+  if(!el){
+    el=document.createElement('div');
+    el.id='storageErr';
+    el.className='lock-screen';
+    el.style.background='rgba(0,0,0,0.9)';
+    el.innerHTML=`
+      <div class="icon-circle" style="width:60px;height:60px; color:var(--danger); border-color:var(--danger);">${ic('close')}</div>
+      <div style="font-size:16px; font-weight:800;">Échec de l'enregistrement</div>
+      <div style="font-size:13px; color:var(--text-dim); max-width:280px; line-height:1.5;">La sauvegarde en ligne a échoué (connexion ou fichier trop lourd). Vérifie ta connexion, allège les médias, puis réessaie.</div>
+      <button class="btn-primary" style="max-width:220px;" onclick="document.getElementById('storageErr').remove()">Compris</button>
+    `;
+    document.getElementById('app').appendChild(el);
+  }
+}
+function editProduct(id){
+  const p = PRODUCTS.find(p=>p.id===id);
+  if(!p) return;
+  productDraft = JSON.parse(JSON.stringify(p));
+  adminSub='creer';
+  go('admin');
+}
+async function deleteProduct(id){
+  const backup = PRODUCTS.slice();
+  PRODUCTS = PRODUCTS.filter(p=>p.id!==id);
+  go('admin');
+  const ok = await deleteProductRemote(id);
+  if(!ok){ PRODUCTS = backup; toast('Échec de la suppression'); go('admin'); return; }
+  toast('Produit supprimé');
+}
+
+function adminCreer(){
+  ensureDraft();
+  const d=productDraft;
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="section-label">IDENTITÉ</div>
+  <div class="field-block"><label>Nom du produit *</label><input value="${d.name}" placeholder="ex. Cali Zkittlez" onchange="draftField('name', this.value)"></div>
+  <div class="field-block"><label>Description</label><textarea placeholder="Notes de dégustation, effets, origine..." onchange="draftField('description', this.value)">${d.description}</textarea></div>
+
+  <div class="section-label">CLASSIFICATION</div>
+  <div class="field-block">
+    <label>${ic('folder')} Catégorie *</label>
+    ${(SETTINGS.categories||[]).length ? `
+    <select onchange="draftField('category', this.value)">
+      <option value="">— Choisir une catégorie —</option>
+      ${(SETTINGS.categories||[]).map(c=>`<option value="${c}" ${d.category===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <p style="margin-top:6px; font-size:11px; color:var(--text-faint);">Pas la bonne catégorie ? Crée-la dans l'onglet <b>Catégories</b> du menu Boutique.</p>
+    ` : `
+    <input value="${d.category}" placeholder="Ex. Indica — ou crée d'abord des catégories dans l'onglet Catégories" onchange="draftField('category', this.value)">
+    `}
+  </div>
+  <div class="field-block"><label>${ic('pin')} Ferme / origine</label><input value="${d.farm}" placeholder="Ou saisissez une nouvelle ferme..." onchange="draftField('farm', this.value)"></div>
+
+  <div class="section-label">MISE EN AVANT</div>
+  ${toggleRowHtml('🔥 Meilleure vente', 'Affiche un badge flamme sur ce produit', d.bestSeller, null, "draftField('bestSeller', !productDraft.bestSeller); go('admin');")}
+  ${toggleRowHtml('💰 Plus rentable', 'Affiche un badge sur ce produit', d.mostProfitable, null, "draftField('mostProfitable', !productDraft.mostProfitable); go('admin');")}
+
+  <div class="section-label">TARIFS <span style="color:var(--text-faint); font-weight:600; text-transform:none; letter-spacing:0;">(grammages / quantités)</span></div>
+  ${d.prices.map((p,i)=>`
+    <div class="priceline">
+      <input value="${p.qty}" placeholder="Quantité (5G, 30G...)" onchange="draftPriceField(${i},'qty',this.value)">
+      <input value="${p.price}" placeholder="Prix (€)" type="number" onchange="draftPriceField(${i},'price',this.value)">
+      <span class="del" onclick="removePriceTier(${i})">${ic('close')}</span>
+    </div>
+    <div class="priceline">
+      <input value="${p.priceRdv}" placeholder="Prix en rendez-vous" type="number" onchange="draftPriceField(${i},'priceRdv',this.value)">
+      <input value="${p.priceLivraison}" placeholder="Prix en livraison" type="number" onchange="draftPriceField(${i},'priceLivraison',this.value)">
+      <span></span>
+    </div>
+  `).join('<div style="height:1px;background:var(--border-soft);margin:4px 16px 12px;"></div>')}
+  <div style="margin:0 16px 8px;"><button class="btn-primary" style="background:transparent; border:1px dashed var(--accent); color:var(--accent);" onclick="addPriceTier()">+ Ajouter un palier de prix</button></div>
+  <p style="margin:0 16px 16px; font-size:11px; color:var(--text-faint); line-height:1.5;">Ajoutez des paliers de prix que nécessaire, ex. 5GR / 30GR / 100G. Laissez vide pour utiliser le prix de base.</p>
+
+  ${toggleRowHtml('Promotion', 'Activer la promo — affiche un prix barré sur la page produit', d.promoEnabled, null, "draftField('promoEnabled', !productDraft.promoEnabled); go('admin');")}
+
+  <div class="section-label">MÉDIAS <span style="color:var(--text-faint); font-weight:600; text-transform:none; letter-spacing:0;">(photos ou vidéos)</span></div>
+  <input type="file" id="productMediaInput" accept="image/*,video/*" multiple style="display:none" onchange="handleProductMedia(this)">
+  <div class="media-grid">
+    ${d.media.map((m,i)=>`
+      <div style="position:relative;">
+        <span class="lbl">${m.type==='video'?'Vidéo':'Image'}</span>
+        <div class="upload-box" style="overflow:hidden; position:relative;">
+          ${m.type==='video' ? `<video src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;" muted></video>` : `<img src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`}
+          <span onclick="removeDraftMedia(${i})" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; color:#fff;">${ic('close')}</span>
+        </div>
+      </div>`).join('')}
+    <div><span class="lbl">Ajouter</span><div class="upload-box" onclick="document.getElementById('productMediaInput').click()" style="cursor:pointer;">${ic('upload')}</div></div>
+  </div>
+  <p style="margin:-8px 16px 16px; font-size:10px; color:var(--text-faint);">Stockées dans le navigateur — privilégie des fichiers légers (grosses vidéos = risque de stockage plein).</p>
+
+  <div style="margin:0 16px 12px;"><button class="btn-primary" onclick="saveProduct()">${d.id?'Mettre à jour le produit':'Créer le produit'}</button></div>
+  ${d.id?`<div style="margin:0 16px 24px;"><button class="btn-outline" onclick="productDraft=null; go('admin');">Annuler l'édition</button></div>`:''}
+  `;
+}
+
+function adminProduits(){
+  const list = PRODUCTS;
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="search-row">
+    <div class="search-box">${ic('search')} Rechercher un produit...</div>
+    <div class="icon-btn">${ic('filter')}</div>
+    <div class="icon-btn" style="position:relative;">${ic('cart')}<span style="position:absolute;top:-4px;right:-4px;background:var(--accent);color:#04240a;font-size:9px;font-weight:800;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center;">${list.length}</span></div>
+  </div>
+  ${list.length===0 ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('box')}</div>
+    <p class="title">Aucun produit</p>
+    <p>Ajoutez votre premier produit pour commencer</p>
+    <button class="btn-primary" style="margin-top:4px;" onclick="productDraft=null; setAdminSub('creer')">${ic('plus')} Créer un produit</button>
+  </div>` : list.map(p=>{
+    const price = p.prices[0];
+    const thumb = p.media[0];
+    return `
+    <div style="display:flex; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 12px; padding:12px; align-items:center;">
+      <div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#000;display:flex;align-items:center;justify-content:center;">
+        ${thumb ? (thumb.type==='video'?`<video src="${thumb.dataUrl}" style="width:100%;height:100%;object-fit:cover;" muted></video>`:`<img src="${thumb.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`) : ic('image')}
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name} ${p.bestSeller?'🔥':''}${p.mostProfitable?'💰':''}</div>
+        <div style="font-size:11.5px; color:var(--text-dim);">${p.category||'Sans catégorie'} ${price?`· ${price.qty||''} ${price.price?price.price+'€':''}`:''}</div>
+      </div>
+      <button class="icon-btn" onclick="editProduct('${p.id}')" style="flex-shrink:0;">${ic('palette')}</button>
+      <button class="icon-btn" onclick="deleteProduct('${p.id}')" style="flex-shrink:0; color:var(--danger);">${ic('close')}</button>
+    </div>`;
+  }).join('')}
+  ${list.length>0?`<div style="margin:8px 16px 24px;"><button class="btn-primary" onclick="productDraft=null; setAdminSub('creer')">${ic('plus')} Ajouter un autre produit</button></div>`:''}
+  `;
+}
+
+function adminCommandes(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="date-tabs">
+    <span>1J</span><span>7J</span><span class="on">30J</span><span>90J</span><span>1A</span><span>Tous</span>
+  </div>
+  <div class="big-stat">
+    <div class="l">CHIFFRE D'AFFAIRES TOTAL</div>
+    <div class="v">0,00 €</div>
+  </div>
+  <div class="stat3">
+    <div class="box"><div class="v">0,00 €</div><div class="l">MOY. / JOUR</div></div>
+    <div class="box"><div class="v">0</div><div class="l">COMMANDES</div></div>
+    <div class="box"><div class="v">0,00 €</div><div class="l">COMMANDE MOY.</div></div>
+  </div>
+  <div class="grp-label">RÉPARTITION DES STATUTS</div>
+  <div style="margin:0 16px 12px;"><button class="btn-primary">${ic('starfull')} Clôturer toutes les commandes actives</button></div>
+  <div style="margin:0 16px 16px;"><button class="btn-outline">${ic('upload')} Télécharger les commandes (CSV)</button></div>
+  <div class="empty-state">
+    <div class="icon-circle">${ic('box')}</div>
+    <p>Aucune commande</p>
+  </div>
+  `;
+}
+
+let categoryFormOpen=false;
+function adminCategories(){
+  const cats = SETTINGS.categories||[];
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:0 16px 14px;">
+    <span style="font-size:13px; color:var(--text-dim); font-weight:600;">${cats.length} catégorie${cats.length>1?'s':''}</span>
+    <button class="admin-tab on" style="padding:8px 14px;" onclick="categoryFormOpen=true; go('admin')">${ic('plus')} Ajouter</button>
+  </div>
+  ${categoryFormOpen ? `
+  <div style="margin:0 16px 16px; display:flex; gap:8px;">
+    <input id="inpNewCat" placeholder="Nom de la catégorie" style="flex:1; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px; padding:12px 14px; color:#fff; font-size:16px;" onkeydown="if(event.key==='Enter') addCategory()">
+    <button class="btn-primary" style="width:auto; padding:0 16px;" onclick="addCategory()">${ic('plus')}</button>
+  </div>` : ''}
+  ${cats.length===0 && !categoryFormOpen ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('folder')}</div>
+    <p class="title">Aucune catégorie</p>
+    <button class="btn-primary" style="margin-top:4px;" onclick="categoryFormOpen=true; go('admin')">+ Créer la catégorie</button>
+  </div>` : cats.map(c=>{
+    const count = PRODUCTS.filter(p=>p.category===c).length;
+    return `
+    <div style="display:flex; align-items:center; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 10px; padding:13px 16px;">
+      ${ic('folder')}
+      <div style="flex:1;"><div style="font-weight:700; font-size:14px;">${c}</div><div style="font-size:11.5px; color:var(--text-dim);">${count} produit${count>1?'s':''}</div></div>
+      <button class="icon-btn" style="color:var(--danger);" onclick="removeCategory('${c.replace(/'/g,"\\'")}')">${ic('close')}</button>
+    </div>`;
+  }).join('')}
+  `;
+}
+async function addCategory(){
+  const input=document.getElementById('inpNewCat');
+  const name=input.value.trim();
+  if(!name){ toast('Entre un nom de catégorie'); return; }
+  if((SETTINGS.categories||[]).some(c=>c.toLowerCase()===name.toLowerCase())){ toast('Cette catégorie existe déjà'); return; }
+  SETTINGS.categories = [...(SETTINGS.categories||[]), name];
+  categoryFormOpen=false;
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Catégorie créée');
+  go('admin');
+}
+async function removeCategory(name){
+  SETTINGS.categories = (SETTINGS.categories||[]).filter(c=>c!==name);
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Catégorie supprimée');
+  go('admin');
+}
+
+function adminAvis(){
+  const {total, avg} = reviewStats();
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="big-stat" style="margin-top:6px;">
+    <div class="l">NOTE MOYENNE</div>
+    <div class="v">${avg.toFixed(1)} <span style="font-size:14px; color:var(--text-dim); font-weight:600;">(${total} avis)</span></div>
+  </div>
+  ${total===0 ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('mail')}</div>
+    <p>Aucun avis pour le moment</p>
+  </div>` : REVIEWS.map(r=>`
+    <div style="display:flex; gap:10px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 10px; padding:12px; align-items:flex-start;">
+      <div style="flex:1; min-width:0;">
+        <div style="display:flex; justify-content:space-between;">
+          <span style="font-weight:700; font-size:13px;">${r.author_name}</span>
+          <span style="font-size:11px; color:var(--text-faint);">${timeAgo(r.created_at)}</span>
+        </div>
+        <div style="display:flex; gap:2px; margin:4px 0; color:var(--accent);">${[1,2,3,4,5].map(i=>ic(i<=r.rating?'starfull':'star')).join('')}</div>
+        ${r.comment?`<p style="font-size:12.5px; color:#ccc;">${r.comment}</p>`:''}
+      </div>
+      <button class="icon-btn" style="color:var(--danger); flex-shrink:0;" onclick="deleteReview(${r.id})">${ic('close')}</button>
+    </div>`).join('')}
+  `;
+}
+async function deleteReview(id){
+  const backup = REVIEWS.slice();
+  REVIEWS = REVIEWS.filter(r=>r.id!==id);
+  go('admin');
+  try{
+    const {error} = await sb.from('miniapp_reviews').delete().eq('id', id);
+    if(error) throw error;
+    toast('Avis supprimé');
+  }catch(e){ REVIEWS = backup; toast('Échec de la suppression'); go('admin'); }
+}
+
+let ALL_VISITORS = [];
+let PENDING_VISITORS_COUNT = 0;
+async function loadVisitors(){
+  try{
+    const {data, error} = await sb.from('miniapp_visitors').select('*').order('first_seen_at', {ascending:false});
+    if(error) throw error;
+    ALL_VISITORS = data||[];
+    PENDING_VISITORS_COUNT = ALL_VISITORS.filter(v=>v.status==='pending').length;
+  }catch(e){ logSbError('loadVisitors', e); }
+}
+function sameDeviceAccounts(visitor){
+  if(!visitor.device_hint) return [];
+  return ALL_VISITORS.filter(v=>v.telegram_id!==visitor.telegram_id && v.device_hint===visitor.device_hint);
+}
+async function decideVisitor(telegramId, status){
+  try{
+    const {error} = await sb.from('miniapp_visitors').update({status, decided_at:new Date().toISOString()}).eq('telegram_id', telegramId);
+    if(error) throw error;
+    await loadVisitors();
+    toast(status==='approved' ? 'Visiteur accepté' : 'Visiteur refusé');
+    go('admin');
+  }catch(e){ toast('Échec de l\u2019action'); }
+}
+
+function adminVerifications(){
+  const pending = ALL_VISITORS.filter(v=>v.status==='pending');
+  const decided = ALL_VISITORS.filter(v=>v.status!=='pending');
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="section-label">EN ATTENTE (${pending.length})</div>
+  ${pending.length===0 ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('shield')}</div>
+    <p>Aucune demande en attente</p>
+  </div>` : pending.map(v=>visitorCardHtml(v, true)).join('')}
+
+  ${decided.length>0 ? `
+  <div class="section-label">DÉCIDÉS (${decided.length})</div>
+  ${decided.map(v=>visitorCardHtml(v, false)).join('')}
+  ` : ''}
+  `;
+}
+
+function estimateAccountAge(telegramId){
+  // Telegram IDs roughly increase over time across all users — NOT an official/precise
+  // field, just a very rough ballpark so the admin isn't flying totally blind.
+  const id = parseInt(telegramId, 10);
+  if(!id) return null;
+  const brackets = [
+    [10000000, 'très ancien compte (~2013-2015)'],
+    [200000000, 'ancien compte (~2016-2018)'],
+    [1000000000, 'compte moyen (~2019-2021)'],
+    [6000000000, 'compte plus récent (~2022-2024)'],
+  ];
+  for(const [max, label] of brackets){ if(id < max) return label; }
+  return 'compte très récent (2025+)';
+}
+function visitorCardHtml(v, showActions){
+  const dup = sameDeviceAccounts(v);
+  const fullName = [v.first_name, v.last_name].filter(Boolean).join(' ') || 'Sans nom';
+  const statusColors = {pending:'#ffb020', approved:'#39ff14', rejected:'#ff4d4d'};
+  const statusLabels = {pending:'En attente', approved:'Accepté', rejected:'Refusé'};
+  const ageHint = estimateAccountAge(v.telegram_id);
+  const shortUA = (v.user_agent||'').match(/iPhone|iPad|Android|Windows|Macintosh|Linux/)?.[0] || (v.user_agent||'').slice(0,40);
+  return `
+  <div style="background:var(--bg-card); border:1px solid var(--border-soft); border-radius:16px; margin:0 16px 12px; padding:14px;">
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
+      ${v.photo_url ? `<img src="${v.photo_url}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:44px;height:44px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center; flex-shrink:0;">${ic('profil')}</div>`}
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:800; font-size:14px;">${fullName} ${v.is_premium?'⭐':''}</div>
+        <div style="font-size:12px; color:var(--text-dim);">${v.username?'@'+v.username:'pas de pseudo'}</div>
+      </div>
+      <span style="font-size:10px; font-weight:800; color:${statusColors[v.status]}; background:${statusColors[v.status]}22; border:1px solid ${statusColors[v.status]}55; padding:3px 9px; border-radius:20px;">${statusLabels[v.status]}</span>
+    </div>
+    <div style="font-size:11.5px; color:var(--text-dim); line-height:1.7;">
+      <div>ID Telegram: <b style="color:#fff;">${v.telegram_id}</b></div>
+      <div>Langue: <b style="color:#fff;">${v.language_code||'?'}</b> · Premium: <b style="color:#fff;">${v.is_premium?'Oui':'Non'}</b></div>
+      <div>Accepte les MP du bot: <b style="color:#fff;">${v.allows_write_to_pm===true?'Oui':v.allows_write_to_pm===false?'Non':'?'}</b></div>
+      ${(v.approx_city||v.approx_country) ? `<div>Localisation approx.: <b style="color:#fff;">${[v.approx_city,v.approx_country].filter(Boolean).join(', ')}</b> <span style="color:var(--text-faint);">(via IP, indicatif)</span></div>` : ''}
+      ${shortUA ? `<div>Appareil: <b style="color:#fff;">${shortUA}</b></div>` : ''}
+      <div>Première visite sur la boutique: <b style="color:#fff;">${new Date(v.first_seen_at).toLocaleString('fr-FR')}</b></div>
+      ${ageHint ? `<div>Ancienneté Telegram estimée: <b style="color:#fff;">${ageHint}</b> <span style="color:var(--text-faint);">(estimation grossière, pas une donnée officielle)</span></div>` : ''}
+      ${dup.length>0 ? `<div style="color:var(--danger); font-weight:700; margin-top:4px;">⚠ ${dup.length} autre${dup.length>1?'s':''} compte(s) vu(s) sur cet appareil : ${dup.map(d=>d.username?'@'+d.username:d.telegram_id).join(', ')}</div>` : ''}
+    </div>
+    ${showActions ? `
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button class="btn-outline" style="color:var(--danger); border-color:var(--danger);" onclick="decideVisitor('${v.telegram_id}','rejected')">Refuser</button>
+      <button class="btn-primary" onclick="decideVisitor('${v.telegram_id}','approved')">Accepter</button>
+    </div>` : ''}
+  </div>`;
+}
+let adminOpenConvo = null;
+let ALL_CHAT = [];
+async function loadAllChat(){
+  try{
+    const {data, error} = await sb.from('miniapp_chat_messages').select('*').order('created_at', {ascending:true});
+    if(error) throw error;
+    ALL_CHAT = data||[];
+  }catch(e){ console.error('loadAllChat failed', e); }
+}
+function chatConversations(){
+  const map={};
+  ALL_CHAT.forEach(m=>{
+    if(!map[m.visitor_id]) map[m.visitor_id]={visitor_id:m.visitor_id, visitor_name:m.visitor_name, messages:[]};
+    map[m.visitor_id].messages.push(m);
+  });
+  return Object.values(map).sort((a,b)=> new Date(b.messages.at(-1).created_at) - new Date(a.messages.at(-1).created_at));
+}
+function openConvo(vid){ adminOpenConvo=vid; adminSub='support'; go('admin'); }
+function closeConvo(){ adminOpenConvo=null; adminSub='support'; go('admin'); }
+async function sendAdminReply(){
+  const input=document.getElementById('adminReplyInput');
+  const text=input.value.trim();
+  if(!text || !adminOpenConvo) return;
+  input.value='';
+  const convo = chatConversations().find(c=>c.visitor_id===adminOpenConvo);
+  try{
+    const {error} = await sb.from('miniapp_chat_messages').insert({
+      visitor_id: adminOpenConvo, visitor_name: convo?convo.visitor_name:'Client', sender:'admin', message:text,
+    });
+    if(error) throw error;
+    await loadAllChat();
+    go('admin');
+  }catch(e){ toast('Échec de l\u2019envoi'); }
+}
+let adminSupportPollTimer=null;
+function startAdminSupportPolling(){
+  clearInterval(adminSupportPollTimer);
+  adminSupportPollTimer=setInterval(async ()=>{
+    if(!(currentView==='admin' && adminSub==='support')){ clearInterval(adminSupportPollTimer); return; }
+    await loadAllChat();
+    go('admin');
+  }, 4000);
+}
+
+function adminSupport(){
+  const opts=[['never','Jamais'],['24h','24h'],['1week','1 semaine']];
+  startAdminSupportPolling();
+  if(adminOpenConvo){
+    const convo = chatConversations().find(c=>c.visitor_id===adminOpenConvo);
+    if(!convo){ adminOpenConvo=null; }
+    else return `
+      ${adminHeader('Fonctionnalités', false)}
+      <div style="padding:6px 16px 10px; display:flex; align-items:center; gap:10px;">
+        <button class="icon-btn" onclick="closeConvo()">${ic('chevright',"rot180")}</button>
+        <div style="font-weight:700;">${convo.visitor_name}</div>
+      </div>
+      <div style="padding:4px 16px 90px; display:flex; flex-direction:column; gap:10px;">
+        ${convo.messages.map(m=>`
+          <div style="display:flex; ${m.sender==='admin'?'justify-content:flex-end':'justify-content:flex-start'};">
+            <div style="max-width:75%; padding:10px 14px; border-radius:16px; font-size:13.5px; line-height:1.4;
+              ${m.sender==='admin' ? 'background:var(--accent); color:#04240a; border-bottom-right-radius:4px;' : 'background:var(--bg-card); color:#fff; border:1px solid var(--border-soft); border-bottom-left-radius:4px;'}">
+              ${m.message}
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="chat-input-bar">
+        <input type="text" id="adminReplyInput" placeholder="Répondre..." onkeydown="if(event.key==='Enter') sendAdminReply()">
+        <button class="send-btn" onclick="sendAdminReply()">${ic('send')}</button>
+      </div>
+    `;
+  }
+  const convos = chatConversations();
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="section-label" style="padding-top:4px;">Support · ${convos.length} conversation${convos.length>1?'s':''}</div>
+  <div class="toggle-row" style="flex-direction:column; align-items:stretch; gap:10px;">
+    <div style="display:flex; justify-content:space-between;">
+      <div class="t">Auto-suppression <span class="saved-tag">APPLIQUÉ CÔTÉ SERVEUR</span></div>
+    </div>
+    <div class="d">${SETTINGS.supportAutoDelete==='never'?'Conserver les messages indéfiniment.':'Suppression automatique après '+(SETTINGS.supportAutoDelete==='24h'?'24 heures':'1 semaine')+'.'}</div>
+    <div class="toggle-inline" style="margin:0;">
+      ${opts.map(o=>`<button class="${SETTINGS.supportAutoDelete===o[0]?'on':''}" onclick="setSetting('supportAutoDelete','${o[0]}',{toast:'Enregistré'})">${o[1]}</button>`).join('')}
+    </div>
+  </div>
+  ${convos.length===0 ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('chatround')}</div>
+    <p class="title">Aucune demande de support</p>
+    <p>Les conversations clients apparaîtront ici.</p>
+  </div>` : convos.map(c=>{
+    const last=c.messages.at(-1);
+    return `
+    <button onclick="openConvo('${c.visitor_id}')" style="width:calc(100% - 32px); text-align:left; display:flex; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 10px; padding:12px; align-items:center;">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center; flex-shrink:0;">${ic('profil')}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:13px;">${c.visitor_name}</div>
+        <div style="font-size:12px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${last.sender==='admin'?'Toi: ':''}${last.message}</div>
+      </div>
+      <span style="font-size:10px; color:var(--text-faint);">${timeAgo(last.created_at)}</span>
+    </button>`;
+  }).join('')}
+  `;
+}
+
+function adminPromos(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:0 16px 14px;">
+    <span style="font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px;">${ic('tag')} Codes Promo <span style="color:var(--text-dim); font-weight:500;">0</span></span>
+    <button class="admin-tab on" style="padding:8px 14px;">${ic('refresh')} Générer</button>
+  </div>
+  <div class="empty-state">
+    <div class="icon-circle">${ic('tag')}</div>
+    <p>Aucun code promo</p>
+    <button class="btn-primary" style="margin-top:4px;">+ Générer</button>
+  </div>
+  `;
+}
+
+function adminBonus(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  ${toggleRowHtml('Système de bonus', 'Les utilisateurs gagnent des coins à chaque commande livrée', SETTINGS.bonusEnabled, 'bonusEnabled')}
+  `;
+}
+
+function adminParrainages(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="section-label">PARRAINAGES</div>
+  ${toggleRowHtml('Signalés uniquement','', SETTINGS.reportedOnly, 'reportedOnly')}
+  <div class="empty-state">
+    <div class="icon-circle">${ic('users')}</div>
+    <p>Aucun parrainage pour le moment</p>
+  </div>
+  `;
+}
+
+function adminJeux(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="empty-state">
+    <div class="icon-circle">${ic('dice')}</div>
+    <p>Aucun jeu configuré pour le moment</p>
+  </div>
+  `;
+}
+
+function adminEconomie(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:0 16px 6px;">
+    <span class="section-label" style="padding:0;">Audit économique</span>
+    <span style="color:var(--accent); font-size:12px; display:flex; align-items:center; gap:4px;">${ic('refresh')} Actualiser</span>
+  </div>
+  <div class="stat3">
+    <div class="box"><div class="v green">0</div><div class="l">PIÈCES EN CIRCULATION</div></div>
+    <div class="box"><div class="v">0</div><div class="l">GAGNÉES AU TOTAL</div></div>
+    <div class="box"><div class="v red">0</div><div class="l">ÉCHANGÉES AU TOTAL</div></div>
+  </div>
+  <div class="grp-label">ORIGINE DES PIÈCES</div>
+  <div style="margin:0 16px 14px;">
+    <div class="list-row"><span class="k">Commandes</span><span class="v">0</span></div>
+    <div class="list-row"><span class="k">Parrainages</span><span class="v">0</span></div>
+    <div class="list-row"><span class="k">Jeux</span><span class="v">0</span></div>
+    <div class="list-row" style="border-bottom:none;"><span class="k">Autre</span><span class="v">0</span></div>
+  </div>
+  <div class="two-col">
+    <div class="box"><h4>${ic('gift')} PARRAINAGES</h4>
+      <div class="row"><span>Total</span><b>0</b></div>
+      <div class="row"><span>Attribués</span><b>0</b></div>
+      <div class="row"><span>Signalés</span><b>0</b></div>
+    </div>
+    <div class="box"><h4>${ic('dice')} JEUX</h4>
+      <div class="row"><span>Parties</span><b>0</b></div>
+      <div class="row"><span>Mise</span><b>0</b></div>
+      <div class="row"><span>Net</span><b>+0</b></div>
+    </div>
+  </div>
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:0 16px 10px;">
+    <span style="font-size:13px; font-weight:700;">Utilisateurs</span>
+    <div class="toggle-inline" style="margin:0; width:auto;"><button class="on" style="flex:none; padding:6px 12px;">Pièces</button><button style="flex:none; padding:6px 12px;">Gagnées</button></div>
+  </div>
+  <div class="user-row"><div><div class="name">@laperledunord</div><div class="meta">gagné 0 · échangé 0 · invités 0 · jeux 0</div></div>${ic('chevright')}</div>
+  <div class="user-row"><div><div class="name">@WikiContact</div><div class="meta">gagné 0 · échangé 0 · invités 0 · jeux 0</div></div>${ic('chevright')}</div>
+  `;
+}
+
+function adminLiens(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="section-label">LIENS</div>
+  <p style="margin:0 16px 14px; font-size:12px; color:var(--text-dim);">Gérez vos plateformes de contact</p>
+  <div class="field-block">
+    <label>👻 Pseudo Snapchat boutique</label>
+    <input id="inpSnap" value="${SETTINGS.snapchatUsername}" placeholder="ex. soucoupe62">
+  </div>
+  <p style="margin:-8px 16px 16px; font-size:11px; color:var(--text-faint); line-height:1.5;">Utilisé pour le bouton "Passer commande" du panier et la page Contact — le récap de commande est copié automatiquement puis Snapchat s'ouvre sur cette conversation.</p>
+  <div style="margin:0 16px 24px;"><button class="btn-primary" onclick="saveLiens()">Enregistrer</button></div>
+  `;
+}
+async function saveLiens(){
+  SETTINGS.snapchatUsername = document.getElementById('inpSnap').value.trim() || 'soucoupe62';
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Liens enregistrés');
+  go('admin');
+}
+
+function adminInfosEdit(){
+  return `
+  ${adminHeader('Fonctionnalités')}
+  <div class="section-label">${ic('truck')} LIVRAISON</div>
+  <div class="field-block"><label>Montant minimum (€)</label><input id="inpLivMin" type="number" value="${SETTINGS.infosLivraisonMin}"></div>
+
+  <div class="section-label">${ic('users')} MEETUP</div>
+  ${toggleRowHtml('Afficher le meetup','', SETTINGS.infosMeetupEnabled, 'infosMeetupEnabled')}
+  <div class="field-block"><label>Ville</label><input id="inpMeetupCity" value="${SETTINGS.infosMeetupCity}"></div>
+  <div class="field-block"><label>Horaires</label><input id="inpMeetupHours" value="${SETTINGS.infosMeetupHours}"></div>
+  <div class="field-block"><label>Minimum (€)</label><input id="inpMeetupMin" type="number" value="${SETTINGS.infosMeetupMin}"></div>
+
+  <div class="section-label">${ic('box')} SERVICE D'ENVOI</div>
+  ${toggleRowHtml("Afficher le paiement Bitcoin",'', SETTINGS.infosEnvoiEnabled, 'infosEnvoiEnabled')}
+  <div class="field-block"><label>Minimum Bitcoin (€)</label><input id="inpBtcMin" type="number" value="${SETTINGS.infosBitcoinMin}"></div>
+
+  <div class="section-label">${ic('question')} QUESTIONS FRÉQUENTES</div>
+  <div class="field-block"><textarea id="inpFaq" rows="3">${SETTINGS.infosFaqText}</textarea></div>
+
+  <div style="margin:0 16px 24px;"><button class="btn-primary" onclick="saveInfosEdit()">${ic('shield')} Enregistrer les infos</button></div>
+  `;
+}
+async function saveInfosEdit(){
+  SETTINGS.infosLivraisonMin = document.getElementById('inpLivMin').value || '0';
+  SETTINGS.infosMeetupCity = document.getElementById('inpMeetupCity').value;
+  SETTINGS.infosMeetupHours = document.getElementById('inpMeetupHours').value;
+  SETTINGS.infosMeetupMin = document.getElementById('inpMeetupMin').value || '0';
+  SETTINGS.infosBitcoinMin = document.getElementById('inpBtcMin').value || '0';
+  SETTINGS.infosFaqText = document.getElementById('inpFaq').value;
+  applySettings();
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Page Infos mise à jour — visible par tous');
+  go('admin');
+}
+
+/* ---- APPARENCE (multi-tab) ---- */
+let appearanceTab='nom';
+function adminApparence(){
+  const tabs=[['nom','Nom'],['fonctionnalites','Fonctionnalités'],['couleurs','Couleurs'],['langue','Langue'],['accueil','Accueil'],['navigation','Navigation']];
+  return `
+  ${adminHeader('Fonctionnalités', false)}
+  <div class="admin-tabs">
+    ${tabs.map(tb=>`<button class="admin-tab ${appearanceTab===tb[0]?'on':''}" onclick="setAppTab('${tb[0]}')">${tb[1]}</button>`).join('')}
+  </div>
+  ${appearanceSection()}
+  `;
+}
+function setAppTab(id){ appearanceTab=id; go('admin'); }
+
+function toggleRowHtml(title, desc, checked, key, extraOnclick){
+  const onclick = extraOnclick || `toggleSetting('${key}','Enregistré')`;
+  return `<div class="toggle-row">
+    <div><div class="t">${title}</div>${desc?`<div class="d">${desc}</div>`:''}</div>
+    <div class="switch ${checked?'on':''}" onclick="${onclick}"></div>
+  </div>`;
+}
+
+function appearanceSection(){
+  if(appearanceTab==='nom'){
+    return `
+    <div class="field-block"><label>Nom dans le bandeau du haut ${ic('starfull')}</label>
+      <input id="inpBandeau" value="${SETTINGS.bandeauName}" placeholder="Ex. MON SHOP" onchange="setSetting('bandeauName', this.value, {toast:'Enregistré'})">
+    </div>
+    <p style="margin:-8px 16px 16px; font-size:11px; color:var(--text-faint);">S'affiche dans l'onglet du navigateur et sert d'identifiant interne de la boutique.</p>
+    `;
+  }
+  if(appearanceTab==='fonctionnalites'){
+    const items=[
+      ['likesEnabled','Activer les likes',"Affiche le bouton « J'aime » sur les avis clients."],
+      ['mixedPricing','Prix mixte','Combinez les grammes de même catégorie et ferme pour atteindre un palier de prix dégressif'],
+      ['productLikes','J\'aime sur les produits','Affiche un ❤️ (cœur) et le compteur sur les produits (distinct des likes avis)'],
+      ['notifsEnabled','Notifications utilisateurs',"Permet aux utilisateurs de s'abonner aux nouveaux produits et promos"],
+      ['cryptoAuto','Paiement crypto automatique','Checkout crypto auto-vérifié : adresse, montant, QR code, vérification on-chain. Identique au checkout de l\'onglet Infos.'],
+    ];
+    return items.map(i=>toggleRowHtml(i[1], i[2], SETTINGS[i[0]], i[0])).join('');
+  }
+  if(appearanceTab==='couleurs'){
+    const colors=['#39FF14','#ff3fa4','#3fa8ff','#ffd60a','#a855f7','#ff4d4d','#14ffe0','#ff9500'];
+    return `
+    <div class="section-label">COULEUR DU THÈME <span class="saved-tag">APPLIQUÉ DIRECT</span></div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Couleur principale de l'application</p>
+    <div class="color-swatches">${colors.map(c=>`<div class="swatch ${SETTINGS.themeColor.toLowerCase()===c.toLowerCase()?'on':''}" style="background:${c}" onclick="setSetting('themeColor','${c}',{toast:'Couleur appliquée'})"></div>`).join('')}</div>
+    <div class="hexrow"><div class="swatch-preview" style="background:${SETTINGS.themeColor}"></div><input value="${SETTINGS.themeColor}" onchange="setSetting('themeColor', this.value, {toast:'Couleur appliquée'})"></div>
+
+    <div class="section-label">COULEUR BARRE DE NAVIGATION</div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Couleur des icônes actives de la barre en bas de l'app</p>
+    <div class="color-swatches">${colors.map(c=>`<div class="swatch ${SETTINGS.navbarColor.toLowerCase()===c.toLowerCase()?'on':''}" style="background:${c}" onclick="setSetting('navbarColor','${c}',{toast:'Couleur appliquée'})"></div>`).join('')}</div>
+    <div class="hexrow"><div class="swatch-preview" style="background:${SETTINGS.navbarColor}"></div><input value="${SETTINGS.navbarColor}" onchange="setSetting('navbarColor', this.value, {toast:'Couleur appliquée'})"></div>
+
+    <div class="section-label">COULEUR DE FOND DES CARTES PRODUIT</div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Appliquée à toutes les cartes produit. Laissez vide pour utiliser la couleur de fond par défaut.</p>
+    <div class="hexrow"><div class="swatch-preview" style="background:${SETTINGS.cardBg||'#1a1a1a'}; border:1px solid var(--border-soft);"></div><input value="${SETTINGS.cardBg}" placeholder="Par défaut" onchange="setSetting('cardBg', this.value, {toast:'Couleur appliquée'})"><span style="color:var(--text-faint); cursor:pointer;" onclick="setSetting('cardBg','',{toast:'Réinitialisé'})">${ic('refresh')}</span></div>
+
+    <div class="section-label">COULEUR DE FOND DE LA NAVBAR</div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Couleur de fond de la barre de navigation</p>
+    <div class="hexrow"><input value="${SETTINGS.navbarBg}" placeholder="Par défaut" onchange="setSetting('navbarBg', this.value, {toast:'Couleur appliquée'})"></div>
+    `;
+  }
+  if(appearanceTab==='langue'){
+    const opts=[['auto','Auto'],['fr','🇫🇷 Français'],['en','🇬🇧 English'],['it','🇮🇹 Italiano'],['es','🇪🇸 Español'],['de','🇩🇪 Deutsch']];
+    return `
+    <div class="section-label">LANGUE PAR DÉFAUT <span class="saved-tag">APPLIQUÉ DIRECT</span></div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Langue affichée pour les nouveaux utilisateurs</p>
+    <div class="lang-grid" style="grid-template-columns:1fr 1fr 1fr;">
+      ${opts.map(o=>`<button class="lang-pill ${SETTINGS.defaultLang===o[0]?'on':''}" onclick="setSetting('defaultLang','${o[0]}',{toast:'Langue par défaut mise à jour'})">${o[1]}</button>`).join('')}
+    </div>
+    `;
+  }
+  if(appearanceTab==='accueil'){
+    return `
+    ${toggleRowHtml("Bannière d'accueil (section Explore) <span class='saved-tag'>APPLIQUÉ DIRECT</span>", "Désactivé = ouverture directe sur la grille produits (pas de bannière ou bouton Explore)", SETTINGS.bannerEnabled, 'bannerEnabled')}
+    <div class="field-block"><label>Nom de marque (grand titre)</label><input id="inpBrand" value="${SETTINGS.brand}"></div>
+    <div class="field-block"><label>Slogan (sous-titre)</label><input id="inpSlogan" value="${SETTINGS.slogan}"></div>
+    <div class="field-block"><label>Bouton CTA (défile vers les produits)</label><input id="inpCta" value="${SETTINGS.cta}"></div>
+    <div style="margin:0 16px 20px;"><button class="btn-primary" onclick="saveHomeTexts()">Enregistrer les textes</button></div>
+    `;
+  }
+  if(appearanceTab==='navigation'){
+    const fonts=['Inter','Poppins','Montserrat','Roboto','Outfit','Nunito'];
+    return `
+    <div class="section-label">NAVIGATION <span class="saved-tag">APPLIQUÉ DIRECT</span></div>
+    ${toggleRowHtml('Infos','', SETTINGS.navInfos, 'navInfos')}
+    ${toggleRowHtml('Carte','', SETTINGS.navCarte, 'navCarte')}
+    ${toggleRowHtml('Support','', SETTINGS.navSupport, 'navSupport')}
+    ${toggleRowHtml('Avis','', SETTINGS.navAvis, 'navAvis')}
+
+    <div class="section-label">TEXTE DÉFILANT <span class="saved-tag">BOUTON ENREGISTRER</span></div>
+    ${toggleRowHtml('Activer', 'Ligne de texte animée sous le logo, défilant de droite à gauche', SETTINGS.scrollEnabled, 'scrollEnabled')}
+    <div class="field-block"><input id="inpScrollText" value="${SETTINGS.scrollText}" placeholder="Texte à faire défiler"></div>
+    <div style="margin:0 16px 20px;"><button class="btn-primary" onclick="saveScrollText()">Enregistrer le texte</button></div>
+
+    <div class="section-label">POLICE <span class="saved-tag">APPLIQUÉ DIRECT</span></div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Police appliquée à toute l'application</p>
+    <div class="font-grid">
+      ${fonts.map(f=>`<div class="font-card ${SETTINGS.font===f?'on':''}" onclick="setSetting('font','${f}',{toast:'Police appliquée'})"><div class="aa" style="font-family:'${f}'">Aa</div><div class="name">${f}</div></div>`).join('')}
+    </div>
+
+    <div class="section-label">ANIMATIONS <span class="saved-tag">APPLIQUÉ DIRECT</span></div>
+    <div class="anim-grid">
+      <div class="anim-card ${SETTINGS.animLeaves?'on':''}" onclick="toggleSetting('animLeaves')"><div class="t">🍂 Pluie de feuilles</div></div>
+      <div class="anim-card ${SETTINGS.animHeli?'on':''}" onclick="toggleSetting('animHeli')"><div class="t">🚁 Hélicoptères</div></div>
+      <div class="anim-card ${SETTINGS.animMoney?'on':''}" onclick="toggleSetting('animMoney')"><div class="t">💵 Pluie de billets</div></div>
+      <div class="anim-card"><div class="t">Pluie personnalisée</div><div class="d">Importez une image PNG qui pleuvra sur l'écran</div></div>
+    </div>
+
+    <div class="section-label">OPTIONS GÉNÉRALES <span class="saved-tag">BOUTON ENREGISTRER</span></div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">5 options personnalisables affichées sur la page d'accueil</p>
+    ${[0,1,2,3,4].map(i=>`<div class="field-block"><input id="inpOpt${i}" value="${SETTINGS.homeOptions[i]||''}" placeholder="Option ${i+1}"></div>`).join('')}
+    <div style="margin:0 16px 20px;"><button class="btn-primary" onclick="saveHomeOptions()">Enregistrer les options</button></div>
+
+    <div class="section-label">FOND D'ÉCRAN</div>
+    <p style="margin:-4px 16px 10px; font-size:11px; color:var(--text-faint);">Image de fond de l'application</p>
+    <input type="file" id="bgFileInput" accept="image/*" style="display:none" onchange="handleBgUpload(this)">
+    <div style="margin:0 16px 16px;"><button class="btn-primary" onclick="document.getElementById('bgFileInput').click()">${ic('upload')} Uploader</button></div>
+    ${SETTINGS.bgImage?`<div style="margin:-8px 16px 16px;"><button class="btn-outline" onclick="setSetting('bgImage','',{toast:'Fond retiré'})">${ic('close')} Retirer le fond actuel</button></div>`:''}
+    <p style="margin:-8px 16px 16px; font-size:10px; color:var(--text-faint);">JPG · PNG · WEBP · GIF · max ~2 MB (stocké localement dans le navigateur)</p>
+
+    ${toggleRowHtml("Animation d'ouverture", "Affiche une brève animation à l'ouverture de la mini-app", SETTINGS.openAnimEnabled, 'openAnimEnabled')}
+    <div class="anim-grid">
+      ${[['none','Aucune','Entrée directe, sans intro'],['pulse','Pulse','Anneaux de lumière pulsés'],['glow','Glow','Halo lumineux rayonnant'],['rays','Rays','Rayons de soleil rotatifs'],['orbit','Orbit','Particules en orbite spirale'],['neon','Neon','Scintillement néon + séparation RVB']]
+        .map(a=>`<div class="anim-card ${SETTINGS.openAnim===a[0]?'on':''}" onclick="setSetting('openAnim','${a[0]}',{toast:'Animation sélectionnée'})"><div class="t">${a[1]}</div><div class="d">${a[2]}</div></div>`).join('')}
+    </div>
+
+    ${toggleRowHtml('Playlist musicale', SETTINGS.musicTracks.length ? "Activee = jouee automatiquement pour chaque visiteur a l ouverture" : "Ajoute une piste ci-dessous pour activer", SETTINGS.musicEnabled, 'musicEnabled')}
+    <p style="margin:-6px 16px 4px; font-size:10px; color:var(--text-faint);">${SETTINGS.musicTracks.length} piste(s) · MP3/M4A/OGG/WAV</p>
+    ${SETTINGS.musicTracks.length ? `<div style="margin:0 16px 12px;">
+      ${SETTINGS.musicTracks.map((tr,i)=>`
+        <div style="display:flex; align-items:center; gap:10px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:12px; padding:10px 12px; margin-bottom:8px;">
+          <span style="color:var(--accent);">${ic('starfull')}</span>
+          <span style="flex:1; font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${tr.name}</span>
+          <button onclick="previewTrack(${i})" class="icon-btn" style="width:30px;height:30px;">${ic('send')}</button>
+          <button onclick="removeTrack(${i})" class="icon-btn" style="width:30px;height:30px; color:var(--danger);">${ic('close')}</button>
+        </div>`).join('')}
+    </div>` : ''}
+    <input type="file" id="musicFileInput" accept="audio/*" style="display:none" onchange="handleMusicUpload(this)">
+    <div style="margin:0 16px 16px;"><button class="btn-primary" onclick="document.getElementById('musicFileInput').click()">+ Ajouter une piste</button></div>
+    <div class="info-note">Quand la playlist est activée, la première piste se lance automatiquement (en boucle) dès qu'un visiteur ouvre l'application — le son démarre coupé le temps d'une interaction (contrainte des navigateurs), puis s'active.</div>
+    `;
+  }
+  return '';
+}
+
+async function saveHomeTexts(){
+  SETTINGS.brand = document.getElementById('inpBrand').value || DEFAULT_SETTINGS.brand;
+  SETTINGS.slogan = document.getElementById('inpSlogan').value || DEFAULT_SETTINGS.slogan;
+  SETTINGS.cta = document.getElementById('inpCta').value || DEFAULT_SETTINGS.cta;
+  applySettings();
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Textes enregistrés — visibles par tous'); go('admin');
+}
+async function saveScrollText(){
+  SETTINGS.scrollText = document.getElementById('inpScrollText').value;
+  applySettings();
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Texte enregistré'); go('admin');
+}
+async function saveHomeOptions(){
+  SETTINGS.homeOptions = [0,1,2,3,4].map(i=>document.getElementById('inpOpt'+i).value);
+  applySettings();
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Options enregistrées'); go('admin');
+}
+function handleBgUpload(input){
+  const file=input.files && input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async ()=>{
+    const compressed = await compressImage(reader.result, 1200, 0.75);
+    const backup = SETTINGS.bgImage;
+    SETTINGS.bgImage = compressed;
+    applySettings();
+    const ok = await persistSettings();
+    if(!ok){ SETTINGS.bgImage=backup; applySettings(); showStorageFullError(); return; }
+    toast('Fond applique — visible par tous');
+    go(currentView);
+  };
+  reader.readAsDataURL(file);
+}
+function handleMusicUpload(input){
+  const file=input.files && input.files[0];
+  if(!file) return;
+  if(file.size > 4*1024*1024){ toast('Fichier > 4 Mo — risque fort de faire échouer l\u2019enregistrement'); }
+  const reader=new FileReader();
+  reader.onload=async ()=>{
+    const backup = SETTINGS.musicTracks.slice();
+    SETTINGS.musicTracks.push({id:'t'+Date.now(), name:file.name, data:reader.result});
+    const ok = await persistSettings();
+    if(!ok){ SETTINGS.musicTracks = backup; showStorageFullError(); return; }
+    toast('Piste ajoutée'); go('admin');
+    refreshMusicPlayer();
+  };
+  reader.readAsDataURL(file);
+}
+async function removeTrack(i){
+  const backup = SETTINGS.musicTracks.slice();
+  SETTINGS.musicTracks.splice(i,1);
+  go('admin');
+  const ok = await persistSettings();
+  if(!ok){ SETTINGS.musicTracks = backup; toast('Échec de la suppression'); go('admin'); return; }
+  toast('Piste supprimée');
+  refreshMusicPlayer();
+}
+function previewTrack(i){
+  const tr=SETTINGS.musicTracks[i];
+  if(!tr) return;
+  let p=document.getElementById('trackPreview');
+  if(!p){ p=document.createElement('audio'); p.id='trackPreview'; document.body.appendChild(p); }
+  p.src=tr.data; p.currentTime=0; p.play().catch(()=>{});
+}
+
+function adminSecurite(){
+  const statusDesc = SETTINGS.secureMode
+    ? (SETTINGS.securePassword ? "Activé — un mot de passe est requis à l'ouverture" : "Activé, mais aucun mot de passe n'est encore défini ci-dessous")
+    : "Désactivé — l'application s'ouvre sans mot de passe";
+  return `
+  ${adminHeader('Fonctionnalités')}
+  ${toggleRowHtml('Mode sécurisé', statusDesc, SETTINGS.secureMode, 'secureMode', "toggleSetting('secureMode', SETTINGS.secureMode ? 'Mode sécurisé désactivé' : 'Mode sécurisé activé')")}
+  <div class="section-label">DÉFINIR UN MOT DE PASSE</div>
+  <div class="field-block"><input type="password" id="pwd1" placeholder="Mot de passe" inputmode="numeric"></div>
+  <div class="field-block"><input type="password" id="pwd2" placeholder="Confirmer le mot de passe" inputmode="numeric"></div>
+  <div id="pwdErr" style="margin:-10px 16px 12px; font-size:12px; color:var(--danger);"></div>
+  <div style="margin:0 16px 16px;"><button class="btn-primary" onclick="savePassword()">${ic('shield')} Enregistrer</button></div>
+  <div class="info-note"><b>Comment ça marche :</b> Quand le mode sécurisé est activé, chaque lancement de la Mini App demande le mot de passe avant d'afficher quoi que ce soit. Le déverrouillage reste valide jusqu'à 12 heures sur l'appareil.</div>
+  `;
+}
+async function savePassword(){
+  const p1=document.getElementById('pwd1').value, p2=document.getElementById('pwd2').value;
+  const err=document.getElementById('pwdErr');
+  if(!p1 || p1.length<4){ err.textContent='4 caractères minimum.'; return; }
+  if(p1!==p2){ err.textContent='Les deux mots de passe ne correspondent pas.'; return; }
+  err.textContent='';
+  SETTINGS.securePassword=p1;
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Mot de passe enregistré');
+  go('admin');
+}
+
+/* ---------------- ROUTER ---------------- */
+let currentView='home';
+const VIEW_RENDERERS={
+  home:viewHome, infos:viewInfos, carte:viewCarte, panier:viewPanier,
+  avis:viewAvis, chat:viewChat, contact:viewContact, profil:viewProfil,
+  admin:()=>viewAdmin(),
+};
+
+function go(id){
+  const hideable={infos:'navInfos', carte:'navCarte', avis:'navAvis', chat:'navSupport'};
+  if(hideable[id] && !SETTINGS[hideable[id]]) id='home';
+  if(id==='admin' && !IS_ADMIN) id='home';
+  const isFreshChatEntry = (id==='chat' && currentView!=='chat');
+  const isFreshCarteEntry = (id==='carte' && currentView!=='carte');
+  const isFreshLikesView = ((id==='home' || id.startsWith('product_')) && currentView!==id);
+  currentView=id;
+  const container=document.getElementById('views');
+  let renderer=VIEW_RENDERERS[id];
+  if(!renderer && id.startsWith('product_')){
+    const pid=id.slice(8);
+    renderer=()=>viewProductDetail(pid);
+  }
+  container.innerHTML = `<div class="view active">${renderer ? renderer() : '<p style=\"padding:40px;text-align:center;color:#888\">Bientôt disponible</p>'}</div>`;
+  renderNav();
+  const scroller=container.querySelector('.view');
+  if(id==='chat' && scroller){ scroller.scrollTop = scroller.scrollHeight; }
+  else{ container.scrollTop=0; if(scroller) scroller.scrollTop=0; }
+  startParticles();
+  if(isFreshChatEntry){ loadMyChat().then(()=>{ if(currentView==='chat') go('chat'); }); }
+  if(isFreshCarteEntry){ setTimeout(initLeafletMap, 30); }
+  if(isFreshLikesView && SETTINGS.productLikes){ loadLikes().then(()=>{ if(currentView===id) go(id); }); }
+}
+
+function renderNav(){
+  const nav=document.getElementById('bottomnav');
+  nav.innerHTML = getNavItems().map(item=>{
+    const active = item.id===currentView;
+    if(item.pill){
+      return `<button class="navitem pill ${active?'active':''}" onclick="go('${item.id}')">
+        <span class="icon-wrap" style="${active?'background:var(--navbar-accent,var(--accent));box-shadow:0 0 12px var(--navbar-accent,var(--accent));':'background:#2a2f2a;'}">${item.id==='profil'?ic('profil'):ic('shield')}</span>
+        ${item.badge?'<span class=\"badge\">'+ic('fire')+'</span>':''}
+      </button>`;
+    }
+    return `<button class="navitem ${active?'active':''}" onclick="go('${item.id}')" style="position:relative;">
+      ${ic(item.icon)}
+      ${item.id==='panier' && cartCount()>0 ? `<span class="badge" style="background:var(--accent); top:-2px; right:22%;">${cartCount()}</span>` : ''}
+      <span>${item.label}</span>
+    </button>`;
+  }).join('');
+}
+
+function tick(){ /* no-op: real device status bar shows the actual time now */ }
+
+/* keep #app sized to the real visible viewport (handles mobile browser chrome show/hide and keyboard) */
+function setVH(){
+  document.documentElement.style.setProperty('--vh', (window.innerHeight*0.01)+'px');
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', setVH);
+
+/* ---------------- TELEGRAM MINI APP INTEGRATION ----------------
+   Outside Telegram (plain browser on PC or phone) none of this runs and the CSS
+   dvh/vh fallback above takes over — that's why it always looked fine there.
+   Inside Telegram's own in-app browser, the WebApp SDK is the only reliable way
+   to get the real usable height and to stop Telegram's own gestures from
+   interfering with our scrolling / bottom nav. */
+function applyTgHeight(){
+  const wa = window.Telegram && window.Telegram.WebApp;
+  if(!wa) return;
+  const h = wa.viewportStableHeight || wa.viewportHeight;
+  if(h) document.documentElement.style.setProperty('--tg-viewport-stable-height', h+'px');
+}
+(function initTelegram(){
+  const wa = window.Telegram && window.Telegram.WebApp;
+  if(!wa){ return; } // not running inside Telegram — nothing to do, CSS fallback handles it
+  try{
+    wa.ready();
+    wa.expand(); // request full available height instead of the collapsed half-screen state
+    if(typeof wa.disableVerticalSwipes === 'function') wa.disableVerticalSwipes(); // stop Telegram's swipe-to-close from eating our scroll
+    if(typeof wa.setHeaderColor === 'function') wa.setHeaderColor('#0a0a0a');
+    if(typeof wa.setBackgroundColor === 'function') wa.setBackgroundColor('#0a0a0a');
+    if(typeof wa.setBottomBarColor === 'function') wa.setBottomBarColor('#0a0a0a');
+    applyTgHeight();
+    wa.onEvent('viewportChanged', applyTgHeight);
+    window.addEventListener('resize', applyTgHeight);
+  }catch(e){ /* older Telegram client missing some methods — safe to ignore, CSS fallback still applies */ }
+})();
+
+/* ---------------- LOCK SCREEN (secure mode) ---------------- */
+function isUnlocked(){
+  try{
+    const until = parseInt(localStorage.getItem('soucoupe62_unlock_until')||'0', 10);
+    return Date.now() < until;
+  }catch(e){ return false; }
+}
+function setUnlocked(){
+  try{ localStorage.setItem('soucoupe62_unlock_until', String(Date.now() + 12*60*60*1000)); }catch(e){}
+}
+function showLockScreen(){
+  const app=document.getElementById('app');
+  const el=document.createElement('div');
+  el.className='lock-screen';
+  el.id='lockScreen';
+  el.innerHTML=`
+    <div class="icon-circle" style="width:64px;height:64px;">${ic('shield')}</div>
+    <div style="font-size:18px; font-weight:800;">Application verrouillée</div>
+    <div style="font-size:13px; color:var(--text-dim); max-width:260px;">Entrez le mot de passe défini par la boutique pour continuer.</div>
+    <input type="password" id="lockInput" placeholder="••••" inputmode="numeric" autofocus>
+    <div class="err" id="lockErr"></div>
+    <button class="btn-primary" style="max-width:260px;" onclick="tryUnlock()">Déverrouiller</button>
+  `;
+  app.appendChild(el);
+  const input=document.getElementById('lockInput');
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
+  setTimeout(()=>input.focus(), 200);
+}
+function tryUnlock(){
+  const val=document.getElementById('lockInput').value;
+  if(val === SETTINGS.securePassword){
+    setUnlocked();
+    document.getElementById('lockScreen').remove();
+  }else{
+    document.getElementById('lockErr').textContent='Mot de passe incorrect.';
+  }
+}
+
+/* ---------------- OPENING INTRO ANIMATION ---------------- */
+function playIntroAnimation(){
+  if(!SETTINGS.openAnimEnabled || SETTINGS.openAnim==='none') return;
+  const app=document.getElementById('app');
+  const el=document.createElement('div');
+  el.className='intro-overlay intro-'+SETTINGS.openAnim;
+  el.innerHTML='<div class="ring"></div>';
+  app.appendChild(el);
+  setTimeout(()=>el.remove(), 2000);
+}
+
+/* ---------------- BOOT ---------------- */
+/* ---------------- BACKGROUND MUSIC (auto-plays for every visitor) ---------------- */
+let bgAudio=null;
+function refreshMusicPlayer(){
+  const shouldPlay = SETTINGS.musicEnabled && SETTINGS.musicTracks.length>0;
+  if(!shouldPlay){
+    if(bgAudio){ bgAudio.pause(); bgAudio=null; }
+    return;
+  }
+  if(!bgAudio){
+    bgAudio=document.createElement('audio');
+    bgAudio.id='bgAudio';
+    bgAudio.loop = SETTINGS.musicTracks.length===1;
+    bgAudio.style.display='none';
+    document.body.appendChild(bgAudio);
+    let idx=0;
+    const playIdx=(i)=>{
+      if(!SETTINGS.musicTracks.length) return;
+      idx = i % SETTINGS.musicTracks.length;
+      bgAudio.src = SETTINGS.musicTracks[idx].data;
+      bgAudio.play().catch(()=>{});
+    };
+    bgAudio.addEventListener('ended', ()=>{ if(SETTINGS.musicTracks.length>1) playIdx(idx+1); });
+    playIdx(0);
+    // Browsers block autoplay with sound until the visitor interacts with the page at least once.
+    // Start muted so playback actually begins, then unmute on the very first tap/click.
+    bgAudio.muted = true;
+    bgAudio.play().catch(()=>{});
+    const unmuteOnce=()=>{
+      bgAudio.muted=false;
+      bgAudio.play().catch(()=>{});
+      document.removeEventListener('click', unmuteOnce);
+      document.removeEventListener('touchstart', unmuteOnce);
+    };
+    document.addEventListener('click', unmuteOnce, {once:true});
+    document.addEventListener('touchstart', unmuteOnce, {once:true});
+  }
+}
+
+function showBootLoader(){
+  const app=document.getElementById('app');
+  const el=document.createElement('div');
+  el.id='bootLoader';
+  el.className='lock-screen';
+  el.style.zIndex='9998';
+  el.innerHTML=`<div class="icon-circle" style="width:56px;height:56px; animation:introSpin 1s linear infinite;">${ic('refresh')}</div><div style="font-size:13px; color:var(--text-dim);">Chargement...</div>`;
+  app.appendChild(el);
+}
+function showConnectionIssueBanner(){
+  const app=document.getElementById('app');
+  let el=document.getElementById('connErr');
+  if(el) return;
+  el=document.createElement('div');
+  el.id='connErr';
+  el.style.cssText='position:absolute; top:10px; left:10px; right:10px; z-index:3000; background:#3a1010; border:1px solid var(--danger); color:#ffb0b0; font-size:12px; font-weight:600; padding:10px 14px; border-radius:12px; display:flex; align-items:center; justify-content:space-between; gap:10px;';
+  el.innerHTML = `<span>Connexion au serveur impossible — données peut-être obsolètes.</span>
+    <button onclick="location.reload()" style="background:var(--danger); color:#fff; border:none; padding:6px 10px; border-radius:8px; font-weight:700; flex-shrink:0;">Recharger</button>`;
+  app.appendChild(el);
+}
+// ---------- Synchronisation en direct (Supabase Realtime) ----------
+// Dès que l'admin modifie un produit ou un réglage, tous les visiteurs déjà
+// ouverts sur la mini-app reçoivent la mise à jour sans avoir besoin de recharger.
+function setupRealtimeSync(){
+  sb.channel('miniapp-live-sync')
+    .on('postgres_changes', {event:'*', schema:'public', table:'miniapp_products'}, async ()=>{
+      await loadProducts();
+      if(currentView!=='admin') go(currentView);
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'miniapp_settings'}, async ()=>{
+      await loadSettings();
+      applySettings();
+      if(currentView!=='admin'){ go(currentView); renderNav(); }
+    })
+    .on('postgres_changes', {event:'*', schema:'public', table:'miniapp_visitors'}, async ()=>{
+      // Nouvelle demande d'accès, ou statut changé — utile pour l'admin (panneau Vérifications)
+      // et pour un visiteur en attente qui vient d'être accepté/refusé (mise à jour instantanée).
+      if(IS_ADMIN){
+        await loadVisitors();
+        if(adminSub==='verifications') go('admin');
+      } else if(MY_VISITOR_STATUS==='pending'){
+        const tgUser = getTgUser();
+        if(tgUser){
+          try{
+            const {data} = await sb.from('miniapp_visitors').select('status').eq('telegram_id', String(tgUser.id)).single();
+            if(data && data.status!==MY_VISITOR_STATUS){
+              MY_VISITOR_STATUS = data.status;
+              renderVerificationGateIfNeeded();
+              if(MY_VISITOR_STATUS==='approved') go('home');
+            }
+          }catch(e){}
+        }
+      }
+    })
+    .subscribe();
+}
+
+async function boot(){
+  showBootLoader();
+  loadCart();
+  await Promise.all([loadSettings(), loadProducts(), loadReviews(), registerAndCheckVisitor(), loadLikes()]);
+  applySettings();
+  const loader=document.getElementById('bootLoader');
+  if(loader) loader.remove();
+  if(lastSettingsLoadFailed){ showConnectionIssueBanner(); }
+  if(SETTINGS.secureMode && SETTINGS.securePassword && !isUnlocked()){
+    showLockScreen();
+  }
+  playIntroAnimation();
+  refreshMusicPlayer();
+  go('home');
+  renderVerificationGateIfNeeded();
+  if(MY_VISITOR_STATUS==='pending') startVisitorStatusPolling();
+  if(IS_ADMIN){ loadVisitors().then(()=>{ if(currentView==='admin') go('admin'); }); }
+  setupRealtimeSync();
+}
+boot();
+</script>
+</body>
+</html>
