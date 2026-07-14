@@ -1236,7 +1236,7 @@ function viewHome(){
         ${p.mostProfitable?`<span style="position:absolute; top:${p.bestSeller?'34px':'8px'}; left:8px; z-index:2; background:rgba(57,255,20,0.15); border:1px solid var(--accent); color:var(--accent); font-size:10px; font-weight:800; padding:3px 8px; border-radius:10px;">💰 Rentable</span>`:''}
         ${SETTINGS.productLikes ? `<div style="position:absolute; top:8px; right:8px; z-index:2;">${likeButtonHtml(p.id)}</div>` : ''}
         <div class="product-thumb">
-          ${thumb ? (thumb.type==='video'?`<video src="${thumb.dataUrl}" muted></video>`:`<img src="${thumb.dataUrl}">`) : ic('image')}
+          ${thumb ? (thumb.type==='video'?`<video src="${mediaSrc(thumb)}" muted></video>`:`<img src="${mediaSrc(thumb)}">`) : ic('image')}
         </div>
         <div class="product-info">
           <div class="product-name">${p.name}</div>
@@ -1583,7 +1583,7 @@ function viewProductDetail(id){
   <div style="display:flex; gap:8px; overflow-x:auto; padding:0 16px 14px; -webkit-overflow-scrolling:touch;">
     ${p.media.length ? p.media.map(m=>`
       <div style="width:260px; height:260px; flex-shrink:0; border-radius:16px; overflow:hidden; background:#000;">
-        ${m.type==='video'?`<video src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;" controls playsinline></video>`:`<img src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`}
+        ${m.type==='video'?`<video src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;" controls playsinline></video>`:`<img src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;">`}
       </div>`).join('') : `<div style="width:100%; height:220px; border-radius:16px; background:var(--bg-card); display:flex; align-items:center; justify-content:center; color:var(--text-faint);">${ic('image')}</div>`}
   </div>
   <div style="padding:0 18px;">
@@ -1672,7 +1672,7 @@ function viewPanier(){
       return `
       <div style="display:flex; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin-bottom:10px; padding:12px; align-items:center;">
         <div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#000;display:flex;align-items:center;justify-content:center;">
-          ${thumb?(thumb.type==='video'?`<video src="${thumb.dataUrl}" muted style="width:100%;height:100%;object-fit:cover;"></video>`:`<img src="${thumb.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`):ic('image')}
+          ${thumb?(thumb.type==='video'?`<video src="${mediaSrc(thumb)}" muted style="width:100%;height:100%;object-fit:cover;"></video>`:`<img src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;">`):ic('image')}
         </div>
         <div style="flex:1; min-width:0;">
           <div style="font-size:13.5px; font-weight:700;">${p.name}</div>
@@ -2234,48 +2234,60 @@ function removePriceTier(idx){
   productDraft.prices.splice(idx,1);
   go('admin');
 }
-function compressImage(dataUrl, maxDim, quality){
+function compressImageToBlob(file, maxDim, quality){
   return new Promise((resolve)=>{
-    const img=new Image();
-    img.onload=()=>{
-      let w=img.width, h=img.height;
-      if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
-      else if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
-      const canvas=document.createElement('canvas');
-      canvas.width=w; canvas.height=h;
-      const ctx=canvas.getContext('2d');
-      ctx.drawImage(img,0,0,w,h);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror=()=>resolve(dataUrl);
-    img.src=dataUrl;
-  });
-}
-function handleProductMedia(input){
-  ensureDraft();
-  const files=Array.from(input.files||[]);
-  let remaining=files.length;
-  if(!remaining) return;
-  files.forEach(file=>{
-    const isVideo = file.type.startsWith('video/');
-    if(isVideo && file.size > 3*1024*1024){
-      toast('Vidéo trop lourde (>3 Mo) — risque de faire échouer l\u2019enregistrement');
-    }
     const reader=new FileReader();
-    reader.onload=async ()=>{
-      let dataUrl=reader.result;
-      if(!isVideo){ dataUrl = await compressImage(dataUrl, 1000, 0.72); }
-      productDraft.media.push({type:isVideo?'video':'image', dataUrl, name:file.name});
-      remaining--;
-      if(remaining===0) go('admin');
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width, h=img.height;
+        if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+        else if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        canvas.toBlob(blob=>resolve(blob||file), 'image/jpeg', quality);
+      };
+      img.onerror=()=>resolve(file);
+      img.src=reader.result;
     };
+    reader.onerror=()=>resolve(file);
     reader.readAsDataURL(file);
   });
 }
-function removeDraftMedia(idx){
+function mediaSrc(m){ return m.url || m.dataUrl; }
+async function handleProductMedia(input){
   ensureDraft();
-  productDraft.media.splice(idx,1);
+  const files=Array.from(input.files||[]);
+  if(!files.length) return;
+  for(const file of files){
+    const isVideo = file.type.startsWith('video/');
+    if(isVideo && file.size > 20*1024*1024){
+      toast('Video trop lourde (>20 Mo)');
+      continue;
+    }
+    try{
+      const blob = isVideo ? file : await compressImageToBlob(file, 1000, 0.72);
+      const ext = (isVideo ? (file.name.split('.').pop()||'mp4') : 'jpg').toLowerCase();
+      const path = `${VISITOR_ID}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const {error} = await sb.storage.from('product-media').upload(path, blob, {contentType: blob.type || file.type});
+      if(error) throw error;
+      const {data} = sb.storage.from('product-media').getPublicUrl(path);
+      productDraft.media.push({type:isVideo?'video':'image', url:data.publicUrl, path, name:file.name});
+      go('admin');
+    }catch(e){
+      logSbError('uploadMedia', e);
+      toast('Echec de l’envoi du media');
+    }
+  }
+}
+async function removeDraftMedia(idx){
+  ensureDraft();
+  const removed = productDraft.media.splice(idx,1)[0];
   go('admin');
+  if(removed && removed.path){
+    try{ await sb.storage.from('product-media').remove([removed.path]); }catch(e){}
+  }
 }
 async function saveProduct(){
   ensureDraft();
@@ -2381,7 +2393,7 @@ function adminCreer(){
       <div style="position:relative;">
         <span class="lbl">${m.type==='video'?'Vidéo':'Image'}</span>
         <div class="upload-box" style="overflow:hidden; position:relative;">
-          ${m.type==='video' ? `<video src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;" muted></video>` : `<img src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`}
+          ${m.type==='video' ? `<video src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;" muted></video>` : `<img src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;">`}
           <span onclick="removeDraftMedia(${i})" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; color:#fff;">${ic('close')}</span>
         </div>
       </div>`).join('')}
@@ -2415,7 +2427,7 @@ function adminProduits(){
     return `
     <div style="display:flex; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 12px; padding:12px; align-items:center;">
       <div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#000;display:flex;align-items:center;justify-content:center;">
-        ${thumb ? (thumb.type==='video'?`<video src="${thumb.dataUrl}" style="width:100%;height:100%;object-fit:cover;" muted></video>`:`<img src="${thumb.dataUrl}" style="width:100%;height:100%;object-fit:cover;">`) : ic('image')}
+        ${thumb ? (thumb.type==='video'?`<video src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;" muted></video>`:`<img src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;">`) : ic('image')}
       </div>
       <div style="flex:1; min-width:0;">
         <div style="font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name} ${p.bestSeller?'🔥':''}${p.mostProfitable?'💰':''}</div>
