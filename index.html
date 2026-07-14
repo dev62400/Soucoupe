@@ -774,10 +774,11 @@ const DEFAULT_SETTINGS = {
   musicEnabled:false, musicTracks:[],
   bgImage:'',
   // Infos tab (editable from admin)
-  infosLivraisonMin:'50',
+  infosLivraisonMin:'50', infosLivraisonText:'',
   infosMeetupEnabled:true, infosMeetupCity:'Lyon', infosMeetupHours:'14h - 23h', infosMeetupMin:'50',
   infosEnvoiEnabled:true, infosBitcoinMin:'100',
   infosFaqText:'Comment recevoir ma commande ? ou un meetup ? Les méthodes disponibles et leurs prix sont affichés au moment de commander.',
+  infosCustomBlocks:[], // blocs Infos ajoutés librement par l'admin: [{icon, title, text}]
   snapchatUsername:'soucoupe62',
   categories:[],
 };
@@ -1343,7 +1344,14 @@ function viewInfos(){
         <div class="info-left">${ic('truck')}<span>${t('livraison')}</span></div>
         <span class="pill-tag">${t('minimum')} ${SETTINGS.infosLivraisonMin}€</span>
       </div>
+      ${SETTINGS.infosLivraisonText?`<p style="font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5;">${SETTINGS.infosLivraisonText}</p>`:''}
     </div>
+
+    ${(SETTINGS.infosCustomBlocks||[]).map(b=>`
+    <div class="info-card">
+      <div class="info-row"><div class="info-left">${ic(b.icon||'info')}<span>${b.title}</span></div></div>
+      ${b.text?`<p style="font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5;">${b.text}</p>`:''}
+    </div>`).join('')}
 
     ${SETTINGS.infosMeetupEnabled ? `
     <div class="info-card">
@@ -2833,11 +2841,15 @@ async function saveLiens(){
   go('admin');
 }
 
+const INFO_BLOCK_ICONS = ['info','truck','users','clock','box','bitcoin','card','question','pin','globe','shield','tag','gift','link','star','mail','location'];
+let infoBlockFormOpen=false;
 function adminInfosEdit(){
+  const blocks = SETTINGS.infosCustomBlocks||[];
   return `
   ${adminHeader('Fonctionnalités')}
   <div class="section-label">${ic('truck')} LIVRAISON</div>
   <div class="field-block"><label>Montant minimum (€)</label><input id="inpLivMin" type="number" value="${SETTINGS.infosLivraisonMin}"></div>
+  <div class="field-block"><label>Texte libre (optionnel)</label><textarea id="inpLivText" rows="2" placeholder="Ex: livraison sous 24h partout en France">${SETTINGS.infosLivraisonText||''}</textarea></div>
 
   <div class="section-label">${ic('users')} MEETUP</div>
   ${toggleRowHtml('Afficher le meetup','', SETTINGS.infosMeetupEnabled, 'infosMeetupEnabled')}
@@ -2853,10 +2865,41 @@ function adminInfosEdit(){
   <div class="field-block"><textarea id="inpFaq" rows="3">${SETTINGS.infosFaqText}</textarea></div>
 
   <div style="margin:0 16px 24px;"><button class="btn-primary" onclick="saveInfosEdit()">${ic('shield')} Enregistrer les infos</button></div>
+
+  <div class="section-label" style="display:flex; align-items:center; justify-content:space-between; padding-right:16px;">
+    <span>${ic('plus')} BLOCS PERSONNALISÉS</span>
+    <button class="admin-tab on" style="padding:6px 12px;" onclick="infoBlockFormOpen=true; go('admin')">${ic('plus')} Ajouter</button>
+  </div>
+  ${infoBlockFormOpen ? `
+  <div style="margin:0 16px 16px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; padding:14px;">
+    <div class="field-block" style="margin:0 0 12px;"><label>Icône</label>
+      <select id="inpBlockIcon">${INFO_BLOCK_ICONS.map(i=>`<option value="${i}">${i}</option>`).join('')}</select>
+    </div>
+    <div class="field-block" style="margin:0 0 12px;"><label>Titre</label><input id="inpBlockTitle" placeholder="Ex: Retrait en point relais"></div>
+    <div class="field-block" style="margin:0;"><label>Texte (optionnel)</label><textarea id="inpBlockText" rows="2" placeholder="Détails à afficher sous le titre"></textarea></div>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button class="btn-outline" onclick="infoBlockFormOpen=false; go('admin')">Annuler</button>
+      <button class="btn-primary" onclick="addInfoBlock()">${ic('check')} Ajouter le bloc</button>
+    </div>
+  </div>` : ''}
+  ${blocks.length===0 && !infoBlockFormOpen ? `
+  <div class="empty-state">
+    <div class="icon-circle">${ic('info')}</div>
+    <p>Aucun bloc personnalisé — ajoute tout ce que tu veux (retrait, garantie, horaires...)</p>
+  </div>` : blocks.map((b,idx)=>`
+  <div style="display:flex; align-items:flex-start; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 10px; padding:13px 16px;">
+    ${ic(b.icon||'info')}
+    <div style="flex:1; min-width:0;">
+      <div style="font-weight:700; font-size:14px;">${b.title}</div>
+      ${b.text?`<div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">${b.text}</div>`:''}
+    </div>
+    <button class="icon-btn" style="color:var(--danger); flex-shrink:0;" onclick="removeInfoBlock(${idx})">${ic('close')}</button>
+  </div>`).join('')}
   `;
 }
 async function saveInfosEdit(){
   SETTINGS.infosLivraisonMin = document.getElementById('inpLivMin').value || '0';
+  SETTINGS.infosLivraisonText = document.getElementById('inpLivText').value;
   SETTINGS.infosMeetupCity = document.getElementById('inpMeetupCity').value;
   SETTINGS.infosMeetupHours = document.getElementById('inpMeetupHours').value;
   SETTINGS.infosMeetupMin = document.getElementById('inpMeetupMin').value || '0';
@@ -2866,6 +2909,25 @@ async function saveInfosEdit(){
   const ok = await persistSettings();
   if(!ok){ showStorageFullError(); return; }
   toast('Page Infos mise à jour — visible par tous');
+  go('admin');
+}
+async function addInfoBlock(){
+  const icon = document.getElementById('inpBlockIcon').value;
+  const title = document.getElementById('inpBlockTitle').value.trim();
+  const text = document.getElementById('inpBlockText').value.trim();
+  if(!title){ toast('Le titre du bloc est requis'); return; }
+  SETTINGS.infosCustomBlocks = [...(SETTINGS.infosCustomBlocks||[]), {icon, title, text}];
+  infoBlockFormOpen = false;
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Bloc ajouté — visible par tous');
+  go('admin');
+}
+async function removeInfoBlock(idx){
+  SETTINGS.infosCustomBlocks = (SETTINGS.infosCustomBlocks||[]).filter((_,i)=>i!==idx);
+  const ok = await persistSettings();
+  if(!ok){ showStorageFullError(); return; }
+  toast('Bloc supprimé');
   go('admin');
 }
 
