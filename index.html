@@ -2452,7 +2452,7 @@ function adminCreer(){
       <div style="position:relative;">
         <span class="lbl">${m.type==='video'?'Vidéo':'Image'}</span>
         <div class="upload-box" style="overflow:hidden; position:relative;">
-          ${m.type==='video' ? `<video src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;" autoplay muted loop playsinline preload="metadata"></video> : `<img src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;">`}
+          ${m.type==='video' ? `<video src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;" autoplay muted loop playsinline preload="metadata"></video>` : `<img src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;">`}
           <span onclick="removeDraftMedia(${i})" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; color:#fff;">${ic('close')}</span>
         </div>
       </div>`).join('')}
