@@ -1295,7 +1295,7 @@ function viewHome(){
         ${p.mostProfitable?`<span style="position:absolute; top:${p.bestSeller?'34px':'8px'}; left:8px; z-index:2; background:rgba(57,255,20,0.15); border:1px solid var(--accent); color:var(--accent); font-size:10px; font-weight:800; padding:3px 8px; border-radius:10px;">💰 Rentable</span>`:''}
         ${SETTINGS.productLikes ? `<div style="position:absolute; top:8px; right:8px; z-index:2;">${likeButtonHtml(p.id)}</div>` : ''}
         <div class="product-thumb">
-          ${thumb ? (thumb.type==='video'?`<video src="${mediaSrc(thumb)}" muted></video>`:`<img src="${mediaSrc(thumb)}">`) : ic('image')}
+          ${thumb ? (thumb.type==='video'?`<video src="${mediaSrc(thumb)}" autoplay muted loop playsinline preload="metadata"></video>`:`<img src="${mediaSrc(thumb)}">`) : ic('image')}
         </div>
         <div class="product-info">
           <div class="product-name">${p.name}</div>
@@ -2452,7 +2452,7 @@ function adminCreer(){
       <div style="position:relative;">
         <span class="lbl">${m.type==='video'?'Vidéo':'Image'}</span>
         <div class="upload-box" style="overflow:hidden; position:relative;">
-          ${m.type==='video' ? `<video src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;" muted></video>` : `<img src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;">`}
+          ${m.type==='video' ? `<video src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;" autoplay muted loop playsinline preload="metadata"></video> : `<img src="${mediaSrc(m)}" style="width:100%;height:100%;object-fit:cover;">`}
           <span onclick="removeDraftMedia(${i})" style="position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; color:#fff;">${ic('close')}</span>
         </div>
       </div>`).join('')}
@@ -2486,7 +2486,7 @@ function adminProduits(){
     return `
     <div style="display:flex; gap:12px; background:var(--bg-card); border:1px solid var(--border-soft); border-radius:14px; margin:0 16px 12px; padding:12px; align-items:center;">
       <div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#000;display:flex;align-items:center;justify-content:center;">
-        ${thumb ? (thumb.type==='video'?`<video src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;" muted></video>`:`<img src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;">`) : ic('image')}
+        ${thumb ? (thumb.type==='video'?`<video src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;" autoplay muted loop playsinline preload="metadata"></video>`:`<img src="${mediaSrc(thumb)}" style="width:100%;height:100%;object-fit:cover;">`) : ic('image')}
       </div>
       <div style="flex:1; min-width:0;">
         <div style="font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name} ${p.bestSeller?'🔥':''}${p.mostProfitable?'💰':''}</div>
