@@ -2327,9 +2327,9 @@ async function handleProductMedia(input){
     }
     try{
       const blob = isVideo ? file : await compressImageToBlob(file, 1000, 0.72);
-      const ext = (isVideo ? (file.name.split('.').pop()||'mp4') : 'jpg').toLowerCase();
+      const ext = isVideo ? 'mp4' : 'jpg';
       const path = `${VISITOR_ID}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const {error} = await sb.storage.from('product-media').upload(path, blob, {contentType: blob.type || file.type});
+      const {error} = await sb.storage.from('product-media').upload(path, blob, {contentType: isVideo ? 'video/mp4' : (blob.type || file.type)});
       if(error) throw error;
       const {data} = sb.storage.from('product-media').getPublicUrl(path);
       productDraft.media.push({type:isVideo?'video':'image', url:data.publicUrl, path, name:file.name});
